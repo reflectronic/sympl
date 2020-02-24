@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq.Expressions;
+using Microsoft.Scripting;
 using Sympl.Expressions;
 using Sympl.Runtime;
 
@@ -16,7 +17,7 @@ namespace Sympl.Syntax
         public SymplExpression[] ParseFile(TextReader reader)
         {
             if (reader is null)
-                throw new ArgumentException("Reader must not be null.");
+                throw new ArgumentNullException(nameof(reader));
 
             var lexer = new Lexer(reader);
             var body = new List<SymplExpression>();
@@ -36,22 +37,22 @@ namespace Sympl.Syntax
         /// </summary>
         public SymplExpression ParseSingleExpression(TextReader reader)
         {
-            if (reader == null)
-                throw new ArgumentException("Reader must not be null.");
+            if (reader is null)
+                throw new ArgumentNullException(nameof(reader));
 
             return ParseExpression(new Lexer(reader));
         }
 
         /// <summary>
         /// Parses an expression from the Lexer passed in.
-        /// </summary>
+        /// </summary>  
         SymplExpression ParseExpression(Lexer lexer)
         {
             var token = lexer.GetToken();
             Debug.Assert(token is { });
             SymplExpression? res = null;
             if (token == SyntaxToken.EOF)
-                throw new SymplParseException("Unexpected EOF encountered while parsing expression.");
+                throw new SymplParseException("Unexpected EOF encountered while parsing expression.", ScriptCodeParseResult.IncompleteToken);
 
             if (token == SyntaxToken.Quote)
             {
@@ -209,7 +210,7 @@ namespace Sympl.Syntax
             }
 
             if (token == SyntaxToken.EOF)
-                throw new SymplParseException(error);
+                throw new SymplParseException(error, ScriptCodeParseResult.IncompleteToken);
 
             return body.ToArray();
         }
@@ -231,7 +232,7 @@ namespace Sympl.Syntax
                 throw new SymplParseException("Import as-names must be same form as member names.");
 
             if (lexer.GetToken() != SyntaxToken.CloseParen)
-                throw new SymplParseException("Import must end with closing paren.");
+                throw new SymplParseException("Import must end with closing paren.", ScriptCodeParseResult.IncompleteToken);
 
             return new SymplImport(nsOrModule, members, asNames);
         }
@@ -371,7 +372,7 @@ namespace Sympl.Syntax
             var lhs = ParseExpression(lexer);
             var val = ParseExpression(lexer);
             if (lexer.GetToken() != SyntaxToken.CloseParen)
-                throw new SymplParseException("Expected close paren for Set expression.");
+                throw new SymplParseException("Expected close paren for Set expression.", ScriptCodeParseResult.IncompleteToken);
 
             return new SymplAssignment(lhs, val);
         }
@@ -385,7 +386,7 @@ namespace Sympl.Syntax
                 throw new SymplParseException("Internal error: parsing Let?");
 
             if (lexer.GetToken() != SyntaxToken.Paren)
-                throw new SymplParseException("Let expression has no bindings?  Missing '('.");
+                throw new SymplParseException("Let expression has no bindings?  Missing '('.", ScriptCodeParseResult.IncompleteToken);
 
             // Get bindings
             var bindings = new List<SymplLetStar.LetBinding>();
@@ -401,11 +402,11 @@ namespace Sympl.Syntax
                 bindings.Add(new SymplLetStar.LetBinding(id.IdToken, init));
 
                 if (lexer.GetToken() != SyntaxToken.CloseParen)
-                    throw new SymplParseException("Let binding missing close paren -- ");
+                    throw new SymplParseException("Let binding missing close paren -- ", ScriptCodeParseResult.IncompleteToken);
             }
 
             if (token != SyntaxToken.CloseParen)
-                throw new SymplParseException("Let bindings missing close paren.");
+                throw new SymplParseException("Let bindings missing close paren.", ScriptCodeParseResult.IncompleteToken);
 
             return new SymplLetStar(bindings.ToArray(), ParseBody(lexer, "Unexpected EOF in Let."));
         }
@@ -499,7 +500,7 @@ namespace Sympl.Syntax
             left = ParseExpression(lexer);
             right = ParseExpression(lexer);
             if (lexer.GetToken() != SyntaxToken.CloseParen)
-                throw new SymplParseException("Expected close paren for Eq call.");
+                throw new SymplParseException($"Expected close paren for Eq call.", ScriptCodeParseResult.IncompleteToken);
         }
 
         /// <summary>
@@ -559,7 +560,7 @@ namespace Sympl.Syntax
                 value = ParseExpression(lexer);
                 token = lexer.GetToken();
                 if (token != SyntaxToken.CloseParen)
-                    throw new SymplParseException("Break expression missing close paren.");
+                    throw new SymplParseException("Break expression missing close paren.", ScriptCodeParseResult.IncompleteToken);
             }
 
             return new SymplBreak(value);
@@ -633,7 +634,7 @@ namespace Sympl.Syntax
 
             if (token == SyntaxToken.EOF)
             {
-                throw new SymplParseException("Unexpected EOF encountered while parsing list.");
+                throw new SymplParseException("Unexpected EOF encountered while parsing list.", ScriptCodeParseResult.IncompleteToken);
             }
 
             return new SymplList(res.ToArray());
@@ -668,10 +669,10 @@ namespace Sympl.Syntax
             if (!(lexer.GetToken() is KeywordToken keyword))
                 throw new SymplParseException("Internal error: parsing Unary?");
 
-            var op = GetExpressionType(keyword);
+            var op = GetExpressionType(keyword); 
             var operand = ParseExpression(lexer);
             if (lexer.GetToken() != SyntaxToken.CloseParen)
-                throw new SymplParseException("Unary expression missing close paren.");
+                throw new SymplParseException("Unary expression missing close paren.", ScriptCodeParseResult.IncompleteToken);
 
             return new SymplUnary(operand, op);
         }

@@ -5,6 +5,7 @@ using Microsoft.Scripting.Utils;
 using System;
 using System.Collections.Generic;
 using Sympl.Runtime;
+using Sympl.Syntax;
 
 namespace Sympl.Hosting
 {
@@ -32,7 +33,11 @@ namespace Sympl.Hosting
         public SymplContext(ScriptDomainManager manager, IDictionary<String, Object> options) : base(manager)
         {
             // TODO: Parse options
-            // TODO: Register event manager.AssemblyLoaded
+            manager.AssemblyLoaded += (sender, e) =>
+            {
+                sympl.RegisterAssembly(e.Assembly);
+            };
+
             sympl = new SymplRuntime(manager.GetLoadedAssemblyList(), manager.Globals);
         }
 
@@ -43,28 +48,30 @@ namespace Sympl.Hosting
         public override ScriptCode? CompileSourceCode(SourceUnit sourceUnit, CompilerOptions options, ErrorSink errorSink)
         {
             using var reader = sourceUnit.GetReader();
-            
+
             try
             {
-                return sourceUnit.Kind switch
+                switch (sourceUnit.Kind)
                 {
-                    SourceCodeKind.SingleStatement => new SymplCode(sympl, sympl.ParseExprToLambda(reader),
-                        sourceUnit),
-                    SourceCodeKind.Expression => new SymplCode(sympl, sympl.ParseExprToLambda(reader),
-                        sourceUnit),
-                    SourceCodeKind.AutoDetect => new SymplCode(sympl, sympl.ParseExprToLambda(reader),
-                        sourceUnit),
-                    SourceCodeKind.InteractiveCode => new SymplCode(sympl, sympl.ParseExprToLambda(reader),
-                        sourceUnit),
-                    SourceCodeKind.Statements => new SymplCode(sympl,
-                        sympl.ParseFileToLambda(sourceUnit.Path, reader), sourceUnit),
-                    SourceCodeKind.File => new SymplCode(sympl, sympl.ParseFileToLambda(sourceUnit.Path, reader),
-                        sourceUnit),
-                    _ => throw Assert.Unreachable
-                };
+                    case SourceCodeKind.Expression:
+                    case SourceCodeKind.Statements:
+                    case SourceCodeKind.SingleStatement:
+                    case SourceCodeKind.InteractiveCode:
+                    case SourceCodeKind.AutoDetect:
+                        return new SymplCode(sympl, sympl.ParseExprToLambda(reader), sourceUnit);
+                    case SourceCodeKind.File:
+                        return new SymplCode(sympl, sympl.ParseFileToLambda(sourceUnit.Path, reader), sourceUnit);
+                    default:
+                        throw Assert.Unreachable;
+                }
             }
             catch (Exception e)
             {
+                if (e is SymplParseException pex)
+                {
+                    sourceUnit.CodeProperties = pex.ParseError;
+                }
+
                 // TODO: Propagate error sink to parser
                 // Real language implementation would have a specific type of exception. Also,
                 // they would pass errorSink down into the parser and add messages while doing
@@ -74,11 +81,19 @@ namespace Sympl.Hosting
             }
         }
 
+        public override Version LanguageVersion { get; } = typeof(SymplContext).Assembly.GetName().Version ?? new Version(0, 0, 0, 0);
+
         /// <remarks>
         /// We expose the original hosting object for creating Symbols or other pre-existing uses.
         /// </remarks>
-        public override TService GetService<TService>(params Object[] args) => typeof(TService) == typeof(SymplRuntime)
-                ? (TService) (Object) sympl
-                : base.GetService<TService>(args);
+        public override TService GetService<TService>(params Object[] args)
+        {
+            if (typeof(TService) == typeof(SymplRuntime))
+            {
+                return (TService) (Object) sympl;
+            }
+
+            return base.GetService<TService>(args);
+        }
     }
 }

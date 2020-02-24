@@ -1,19 +1,15 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
     public class SymplParseException : Exception
     {
-        public SymplParseException(String msg) : base(msg)
-        {
-        }
+        public ScriptCodeParseResult ParseError { get; }
 
-        public SymplParseException()
+        public SymplParseException(String msg, ScriptCodeParseResult error = ScriptCodeParseResult.Invalid) : base(msg)
         {
-        }
-
-        public SymplParseException(String message, Exception innerException) : base(message, innerException)
-        {
+            ParseError = error;
         }
     }
 }

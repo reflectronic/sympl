@@ -70,7 +70,7 @@ namespace Sympl.Runtime
             else
             {
                 // What has more than one name, must be Globals access.
-                value = what.Aggregate<String, Object>(runtime.Globals, (current, name) => DynamicObjectHelpers.GetMember((IDynamicMetaObjectProvider) current, name));
+                value = what.Aggregate((Object) runtime.Globals, (current, name) => DynamicObjectHelpers.GetMember((IDynamicMetaObjectProvider) current, name));
                 // For more correctness and generality, shouldn't assume all globals are dynamic
                 // objects, or that a look up like foo.bar.baz cascades through all dynamic objects.
                 // Would need to manually create a CallSite here with Sympl's GetMemberBinder, and
