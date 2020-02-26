@@ -4,7 +4,7 @@ using Microsoft.Scripting.Hosting.Shell;
 
 namespace Sympl
 {
-    public sealed class SymplCommandExecutor : ICommandDispatcher
+    sealed class SymplCommandExecutor : ICommandDispatcher
     {
         public SymplCommandExecutor(IConsole console)
         {

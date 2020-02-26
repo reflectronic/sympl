@@ -5,7 +5,7 @@ using Sympl.Hosting;
 
 namespace Sympl
 {
-    public sealed class SymplConsoleHost : ConsoleHost
+    sealed class SymplConsoleHost : ConsoleHost
     {
         protected override void ExecuteInternal()
         {

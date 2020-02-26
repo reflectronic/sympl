@@ -3,7 +3,7 @@ using Microsoft.Scripting.Hosting.Shell;
 
 namespace Sympl
 {
-    public sealed class SymplCommandLine : CommandLine
+    sealed class SymplCommandLine : CommandLine
     {
         protected override ICommandDispatcher CreateCommandDispatcher() => new SymplCommandExecutor(Console);
 

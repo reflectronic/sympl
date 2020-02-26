@@ -66,7 +66,7 @@ namespace Sympl.Analysis
         public ParameterExpression? GetModuleExpr()
         {
             AnalysisScope? curScope = this;
-            while (curScope?.ModuleExpr == null)
+            while (curScope?.ModuleExpr is null)
             {
                 curScope = curScope?.Parent;
             }

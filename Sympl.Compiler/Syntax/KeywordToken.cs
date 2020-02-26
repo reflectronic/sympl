@@ -1,88 +1,101 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
+using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
     class KeywordToken : IdOrKeywordToken
     {
-        KeywordToken(String id) : base(id)
+        public KeywordTokenKind Kind { get; }
+
+        KeywordToken(KeywordTokenKind kind, SourceSpan location) : base(KeywordToString[kind], location)
         {
+            Kind = kind;
         }
 
-        public static readonly KeywordToken Import = new KeywordToken("Import");
-        public static readonly KeywordToken Defun = new KeywordToken("Defun");
-        public static readonly KeywordToken Lambda = new KeywordToken("Lambda");
-        public static readonly KeywordToken Defclass = new KeywordToken("Defclass");
-        public static readonly KeywordToken Defmethod = new KeywordToken("Defmethod");
-        public static readonly KeywordToken New = new KeywordToken("New");
-        public static readonly KeywordToken Set = new KeywordToken("Set");
-        public static readonly KeywordToken LetStar = new KeywordToken("LetStar");
-        public static readonly KeywordToken Block = new KeywordToken("Block");
-        public static readonly KeywordToken Loop = new KeywordToken("Loop");
-        public static readonly KeywordToken Break = new KeywordToken("Break");
-        public static readonly KeywordToken Continue = new KeywordToken("Continue");
-        public static readonly KeywordToken Return = new KeywordToken("Return");
-        public static readonly KeywordToken List = new KeywordToken("List");
-        public static readonly KeywordToken Cons = new KeywordToken("Cons");
-        public static readonly KeywordToken Eq = new KeywordToken("Eq");
-        public static readonly KeywordToken Elt = new KeywordToken("Elt");
-        public static readonly KeywordToken Nil = new KeywordToken("Nil");
-        public static readonly KeywordToken True = new KeywordToken("True");
-        public static readonly KeywordToken If = new KeywordToken("If");
-        public static readonly KeywordToken False = new KeywordToken("False");
-        public static readonly KeywordToken Add = new KeywordToken("+");
-        public static readonly KeywordToken Subtract = new KeywordToken("-");
-        public static readonly KeywordToken Multiply = new KeywordToken("*");
-        public static readonly KeywordToken Divide = new KeywordToken("/");
-        public static readonly KeywordToken Equal = new KeywordToken("=");
-        public static readonly KeywordToken NotEqual = new KeywordToken("!=");
-        public static readonly KeywordToken GreaterThan = new KeywordToken(">");
-        public static readonly KeywordToken LessThan = new KeywordToken("<");
-        public static readonly KeywordToken And = new KeywordToken("And");
-        public static readonly KeywordToken Or = new KeywordToken("Or");
-        public static readonly KeywordToken Not = new KeywordToken("Not");
-
-        static readonly Dictionary<String, KeywordToken> Keywords = new Dictionary<String, KeywordToken>(StringComparer.OrdinalIgnoreCase)
+        static readonly Dictionary<String, KeywordTokenKind> StringToKeyword = new Dictionary<String, KeywordTokenKind>(StringComparer.OrdinalIgnoreCase)
         {
-            { "import", Import },
-            { "defun", Defun },
-            { "lambda", Lambda },
-            { "defclass", Defclass },
-            { "defmethod", Defmethod },
-            { "new", New },
-            { "set", Set },
-            { "let*", LetStar },
-            { "block", Block },
-            { "loop", Loop },
-            { "break", Break },
-            { "continue", Continue },
-            { "return", Return },
-            { "cons", Cons },
-            { "eq", Eq },
-            { "list", List },
-            { "elt", Elt },
-            { "nil", Nil },
-            { "true", True },
-            { "if", If },
-            { "false", False },
-            { "+", Add },
-            { "-", Subtract },
-            { "*", Multiply },
-            { "/", Divide },
-            { "=", Equal },
-            { "!=", NotEqual },
-            { ">", GreaterThan },
-            { "<", LessThan },
-            { "and", And },
-            { "or", Or },
-            { "not", Not }
+            { "import", KeywordTokenKind.Import },
+            { "defun", KeywordTokenKind.Defun },
+            { "lambda", KeywordTokenKind.Lambda },
+            { "defclass", KeywordTokenKind.Defclass },
+            { "defmethod", KeywordTokenKind.Defmethod },
+            { "new", KeywordTokenKind.New },
+            { "set", KeywordTokenKind.Set },
+            { "let*", KeywordTokenKind.LetStar },
+            { "block", KeywordTokenKind.Block },
+            { "loop", KeywordTokenKind.Loop },
+            { "break", KeywordTokenKind.Break },
+            { "continue", KeywordTokenKind.Continue },
+            { "return", KeywordTokenKind.Return },
+            { "cons", KeywordTokenKind.Cons },
+            { "eq", KeywordTokenKind.Eq },
+            { "list", KeywordTokenKind.List },
+            { "elt", KeywordTokenKind.Elt },
+            { "nil", KeywordTokenKind.Nil },
+            { "true", KeywordTokenKind.True },
+            { "if", KeywordTokenKind.If },
+            { "false", KeywordTokenKind.False },
+            { "+", KeywordTokenKind.Add },
+            { "-", KeywordTokenKind.Subtract },
+            { "*", KeywordTokenKind.Multiply },
+            { "/", KeywordTokenKind.Divide },
+            { "=", KeywordTokenKind.Equal },
+            { "!=", KeywordTokenKind.NotEqual },
+            { ">", KeywordTokenKind.GreaterThan },
+            { "<", KeywordTokenKind.LessThan },
+            { "and", KeywordTokenKind.And },
+            { "or", KeywordTokenKind.Or },
+            { "not", KeywordTokenKind.Not }
+        };
+        static readonly Dictionary<KeywordTokenKind, String> KeywordToString = new Dictionary<KeywordTokenKind, String>()
+        {
+            { KeywordTokenKind.Import, "import" },
+            { KeywordTokenKind.Defun, "defun" },
+            { KeywordTokenKind.Lambda, "lambda" },
+            { KeywordTokenKind.Defclass, "defclass" },
+            { KeywordTokenKind.Defmethod, "defmethod" },
+            { KeywordTokenKind.New, "new" },
+            { KeywordTokenKind.Set, "set" },
+            { KeywordTokenKind.LetStar, "let*" },
+            { KeywordTokenKind.Block, "block" },
+            { KeywordTokenKind.Loop, "loop" },
+            { KeywordTokenKind.Break, "break" },
+            { KeywordTokenKind.Continue, "continue" },
+            { KeywordTokenKind.Return, "return" },
+            { KeywordTokenKind.Cons, "cons" },
+            { KeywordTokenKind.Eq, "eq" },
+            { KeywordTokenKind.List, "list" },
+            { KeywordTokenKind.Elt, "elt" },
+            { KeywordTokenKind.Nil, "nil" },
+            { KeywordTokenKind.True, "true" },
+            { KeywordTokenKind.If, "if" },
+            { KeywordTokenKind.False, "false" },
+            { KeywordTokenKind.Add, "+" },
+            { KeywordTokenKind.Subtract, "-" },
+            { KeywordTokenKind.Multiply, "*" },
+            { KeywordTokenKind.Divide, "/" },
+            { KeywordTokenKind.Equal, "=" },
+            { KeywordTokenKind.NotEqual, "!=" },
+            { KeywordTokenKind.GreaterThan, ">" },
+            { KeywordTokenKind.LessThan, "<" },
+            { KeywordTokenKind.And, "and" },
+            { KeywordTokenKind.Or, "or" },
+            { KeywordTokenKind.Not, "not" }
         };
 
-        public override Boolean IsKeywordToken => true;
+        internal static KeywordToken MakeKeywordToken(String name, SourceSpan location)
+        {
+            if (StringToKeyword.TryGetValue(name, out var kind))
+            {
+                return new KeywordToken(kind, location);
+            }
+            else
+            {
+                throw new ArgumentException("Given keyword name is not a keyword.", nameof(name));
+            }
+        }
 
-        internal static KeywordToken GetKeywordToken(String name) => Keywords[name];
-
-        internal static Boolean IsKeywordName(String id) => Keywords.ContainsKey(id);
+        internal static Boolean IsKeywordName(String id) => StringToKeyword.ContainsKey(id);
     }
 }

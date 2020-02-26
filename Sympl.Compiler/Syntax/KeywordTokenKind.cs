@@ -1,0 +1,38 @@
+﻿namespace Sympl.Syntax
+{
+    enum KeywordTokenKind
+    {
+        Import,
+        Defun,
+        Lambda,
+        Defclass,
+        Defmethod,
+        New,
+        Set,
+        LetStar,
+        Block,
+        Loop,
+        Break,
+        Continue,
+        Return,
+        Cons,
+        Eq,
+        List,
+        Elt,
+        Nil,
+        True,
+        If,
+        False,
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Equal,
+        NotEqual,
+        GreaterThan,
+        LessThan,
+        And,
+        Or,
+        Not
+    }
+}

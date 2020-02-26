@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
@@ -6,7 +7,7 @@ namespace Sympl.Syntax
     {
         public Object Value { get; }
 
-        public LiteralToken(Object val)
+        public LiteralToken(Object val, SourceSpan location) : base(location)
         {
             Value = val;
         }

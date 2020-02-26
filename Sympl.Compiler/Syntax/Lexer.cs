@@ -1,23 +1,28 @@
 using System;
+using System.Globalization;
 using System.IO;
-using System.Text;
+using Microsoft.Scripting;
+using Microsoft.Scripting.Runtime;
 
 namespace Sympl.Syntax
 {
     public class Lexer
     {
         Token? putToken;
-        readonly TextReader reader;
+        readonly TokenizerBuffer reader;
         const Char EOF = unchecked((Char) (-1));
 
         public Lexer(TextReader reader)
         {
-            this.reader = reader ?? throw new ArgumentNullException(nameof(reader));
+            if (reader is null)
+                throw new ArgumentNullException(nameof(reader));
+
+            this.reader = new TokenizerBuffer(reader, new SourceLocation(0, 1, 1), 4, true);
         }
 
         public void PutToken(Token token)
         {
-            if (putToken != null)
+            if (putToken is { })
             {
                 throw new InvalidOperationException("Internal Error: putting token when there is one?");
             }
@@ -30,18 +35,10 @@ namespace Sympl.Syntax
         /// <remarks>
         /// If returning token directly based on char, need to gobble char, but if calling helper
         /// function to read more, then they gobble as needed.
-        ///
-        /// TODO: Maintain source location info and store in token.
         /// </remarks>
         public Token GetToken()
         {
-            var token = Lex();
-            return token;
-        }
-
-        Token Lex()
-        {
-            if (putToken != null)
+            if (putToken is { })
             {
                 var tmp = putToken;
                 putToken = null;
@@ -49,32 +46,37 @@ namespace Sympl.Syntax
             }
 
             SkipWhitespace();
-            var ch = PeekChar();
+            var ch = (Char) reader.Peek();
+            reader.DiscardToken();
 
             switch (ch)
             {
                 case EOF:
-                    return SyntaxToken.EOF;
+                    return SyntaxToken.Eof;
                 case '(':
-                    GetChar();
-                    return SyntaxToken.Paren;
+                    reader.Read();
+                    reader.MarkMultiLineTokenEnd();
+                    return new SyntaxToken(SyntaxTokenKind.OpenParenthesis, reader.TokenSpan);
                 case ')':
-                    GetChar();
-                    return SyntaxToken.CloseParen;
+                    reader.Read();
+                    reader.MarkMultiLineTokenEnd();
+                    return new SyntaxToken(SyntaxTokenKind.CloseParenthesis, reader.TokenSpan);
+                case '.':
+                    reader.Read();
+                    reader.MarkMultiLineTokenEnd();
+                    return new SyntaxToken(SyntaxTokenKind.Dot, reader.TokenSpan);
+                case '\'':
+                    reader.Read();
+                    reader.MarkMultiLineTokenEnd();
+                    return new SyntaxToken(SyntaxTokenKind.Quote, reader.TokenSpan);
                 case var _ when IsNumChar(ch):
                     return GetNumber();
                 case '"':
                     return GetString();
-                case '\'':
-                    GetChar();
-                    return SyntaxToken.Quote;
                 case '-':
                     return GetIdOrNumber();
                 case var _ when StartsId(ch):
                     return GetIdOrKeyword();
-                case '.':
-                    GetChar();
-                    return SyntaxToken.Dot;
                 default:
                     throw new InvalidOperationException("Internal: couldn't get token?");
             }
@@ -83,75 +85,48 @@ namespace Sympl.Syntax
         /// <devdoc>Expects a hyphen as the current char, and returns an Id or number token.</devdoc>
         Token GetIdOrNumber()
         {
-            var ch = GetChar();
+            var ch = (Char) reader.Read();
             if (ch == EOF || ch != '-')
             {
                 throw new InvalidOperationException("Internal: parsing ID or number without hyphen.");
             }
 
-            ch = PeekChar();
+            ch = (Char) reader.Peek();
             if (IsNumChar(ch))
             {
                 var token = GetNumber();
-                return new NumberToken(-(Int32) token.Value);
+                return new NumberToken(-(Double) token.Value, reader.TokenSpan);
             }
             else if (!IsIdTerminator(ch))
             {
-                return GetIdOrKeyword('-');
+                return GetIdOrKeyword();
             }
             else
             {
-                return MakeIdOrKeywordToken("-", false);
+                return MakeIdOrKeywordToken(false);
             }
         }
 
-        /// <devdoc>
-        /// GetIdOrKeyword has first param to handle call from GetIdOrNumber where ID started with a
-        /// hyphen (and looked like a number). Didn't want to add hyphen to StartId test since it
-        /// normally appears as the keyword minus. Usually the overload without the first param is called.
-        ///
-        /// Must not call when the next char is EOF.
-        /// </devdoc>
-        IdOrKeywordToken GetIdOrKeyword() => GetIdOrKeyword(GetChar());
-
-        IdOrKeywordToken GetIdOrKeyword(Char first)
+        IdOrKeywordToken GetIdOrKeyword()
         {
-            var quotedId = false;
+            var first = (Char) reader.Read();
+            var isQuoted = false;
             if (first == EOF || !StartsId(first))
             {
                 throw new InvalidOperationException("Internal: getting Id or keyword?");
             }
 
-            var res = new StringBuilder();
-            Char c;
             if (first == '\\')
             {
-                quotedId = true;
-                c = GetChar();
-                
-                if (c == EOF)
-                    throw new InvalidOperationException("Unexpected EOF when getting Id.");
-                if (!StartsId(first))
-                    throw new InvalidOperationException(
-                        "Don't support quoted Ids that have non Id constituent characters.");
-
-                res.Append(c);
-            }
-            else
-            {
-                res.Append(first);
+                isQuoted = true;
+                reader.Read();
+                reader.DiscardToken();
             }
 
-            // See if there's more chars to Id
-            c = PeekChar();
-            while (c != EOF && !IsIdTerminator(c))
-            {
-                res.Append(c);
-                GetChar();
-                c = PeekChar();
-            }
+            while (!IsIdTerminator((Char) reader.Peek())) { reader.Read(); }
 
-            return MakeIdOrKeywordToken(res.ToString(), quotedId);
+            reader.MarkMultiLineTokenEnd();
+            return MakeIdOrKeywordToken(isQuoted);
         }
 
         /// <devdoc>
@@ -159,14 +134,16 @@ namespace Sympl.Syntax
         /// member names and metadata on binders, then if some MO doesn't respect the IgnoreCase
         /// flag, there's an out for still binding.
         /// </devdoc>
-        static IdOrKeywordToken MakeIdOrKeywordToken(String name, Boolean quotedId)
+        IdOrKeywordToken MakeIdOrKeywordToken(Boolean isQuoted)
         {
-            if (!quotedId && KeywordToken.IsKeywordName(name))
+            var name = reader.GetTokenString();
+            if (!isQuoted && KeywordToken.IsKeywordName(name))
             {
-                return KeywordToken.GetKeywordToken(name);
+                return KeywordToken.MakeKeywordToken(name, reader.TokenSpan);
             }
             else
             {
+                // TODO: Add to error sink
                 if (name.Equals("let", StringComparison.OrdinalIgnoreCase))
                 {
                     Console.WriteLine();
@@ -174,7 +151,7 @@ namespace Sympl.Syntax
                     Console.WriteLine();
                 }
 
-                return new IdOrKeywordToken(name);
+                return new IdOrKeywordToken(name, reader.TokenSpan);
             }
         }
 
@@ -186,130 +163,63 @@ namespace Sympl.Syntax
         /// in IDs to support .NET type names that come from reflection. We can fix this later with
         /// more machinery around type names.
         /// </devdoc>
-        static readonly Char[] IdTerminators = { '(', ')', '\"', ';', ',', /*'`',*/ '@', '\'', '.' };
+        static readonly Char[] IdTerminators = { '(', ')', '"', ';', ',', /*'`',*/ '@', '\'', '.' };
 
-        static Boolean IsIdTerminator(Char c) => Array.IndexOf(IdTerminators, c) != -1 || (c < (Char) 33);
+        static Boolean IsIdTerminator(Char c) => Array.IndexOf(IdTerminators, c) != -1 || (c < (Char) 0x21);
 
         /// <summary>
         /// Returns parsed integers as NumberTokens.
         /// </summary>
-        /// <devdoc>TODO: Update and use .NET's <see cref="Double.Parse(String)"/> after scanning to non-constituent char.</devdoc>
         NumberToken GetNumber()
         {
             // Check integrity before loop to avoid accidentally returning zero.
-            var c = GetChar();
-            if (c == EOF || !IsNumChar(c))
-            {
-                throw new InvalidOperationException("Internal: lexing number?");
-            }
+            while (IsNumChar((Char) reader.Peek())) { reader.Read();  }
+            reader.MarkMultiLineTokenEnd();
 
-            var digit = c - '0';
-            var res = digit;
-            c = PeekChar();
-            while (c != EOF && IsNumChar(c))
-            {
-                res = res * 10 + (c - '0');
-                GetChar();
-                c = PeekChar();
-            }
-
-            return new NumberToken(res);
+            return new NumberToken(Double.Parse(reader.GetTokenString(), CultureInfo.InvariantCulture), reader.TokenSpan);
         }
 
         StringToken GetString()
         {
-            var c = GetChar();
+            var c = reader.Read();
             if (c == EOF || c != '\"')
             {
                 throw new InvalidOperationException("Internal: parsing string?");
             }
 
-            var res = new StringBuilder();
-            var escape = false;
-            c = PeekChar();
             while (true)
             {
-                if (c == EOF)
+                var ch = (Char) reader.Read();
+
+                if (ch == EOF)
                 {
-                    throw new InvalidOperationException("Hit EOF in string literal.");
-                }
-                else if (c == '\n' || c == '\r')
-                {
-                    throw new InvalidOperationException("Hit newline in string literal");
-                }
-                else if (c == '\\' && !escape)
-                {
-                    GetChar();
-                    escape = true;
-                }
-                else if (c == '"' && !escape)
-                {
-                    GetChar();
-                    return new StringToken(res.ToString());
-                }
-                else if (escape)
-                {
-                    escape = false;
-                    GetChar();
-                    switch (c)
-                    {
-                        case 'n':
-                            res.Append('\n');
-                            break;
-                        case 't':
-                            res.Append('\t');
-                            break;
-                        case 'r':
-                            res.Append('\r');
-                            break;
-                        case '\"':
-                            res.Append('\"');
-                            break;
-                        case '\\':
-                            res.Append('\\');
-                            break;
-                    }
-                }
-                else
-                {
-                    GetChar();
-                    res.Append(c);
+                    throw new SymplParseException("Hit EOF in string literal.");
                 }
 
-                c = PeekChar();
+                if (reader.IsEoln(ch))
+                {
+                    throw new SymplParseException("Hit error in error error.");
+                }
+
+                if (ch == '"') break;
             }
-        }
 
-        public Int32 Line { get; private set; } = 1;
+            reader.MarkMultiLineTokenEnd();
+            return new StringToken(reader.GetTokenString(), reader.TokenSpan);
+        }
 
         static readonly Char[] WhitespaceChars = { ' ', '\r', '\n', ';', '\t' };
 
         void SkipWhitespace()
         {
-            for (var ch = PeekChar(); Array.IndexOf(WhitespaceChars, ch) != -1; ch = PeekChar())
+            for (var ch = reader.Peek(); Array.IndexOf(WhitespaceChars, (Char) ch) != -1; ch = reader.Peek())
             {
-                if (ch == '\n') Line++;
-                if (ch == ';')
-                {
-                    do
-                    {
-                        GetChar();
-                        ch = PeekChar();
-                        if (ch == EOF) return;
-                        // If newline seq is two chars, second gets eaten in outer loop.
-                    } while (ch != '\n' && ch != '\r');
-                }
-                else
-                {
-                    GetChar();
-                }
+                reader.Read();
             }
+
+            reader.MarkMultiLineTokenEnd();
         }
 
-        Char GetChar() => unchecked((Char) reader.Read());
-
-        Char PeekChar() => unchecked((Char) reader.Peek());
-
-        static Boolean IsNumChar(Char c) => c >= '0' && c <= '9';
+        static Boolean IsNumChar(Char c) => c == '.' || c >= '0' && c <= '9';
     }
 }

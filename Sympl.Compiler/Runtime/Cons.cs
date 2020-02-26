@@ -6,7 +6,7 @@ namespace Sympl.Runtime
     {
         public Cons(Object? first, Object? rest)
         {
-            this.First = first;
+            First = first;
             Rest = rest;
         }
 
@@ -16,7 +16,7 @@ namespace Sympl.Runtime
             Cons? head = this;
             var res = "(";
 
-            while (head != null)
+            while (head is { })
             {
                 res += head.First?.ToString() ?? "nil";
                 switch (head.Rest)

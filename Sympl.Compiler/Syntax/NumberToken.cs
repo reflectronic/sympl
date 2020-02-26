@@ -1,10 +1,11 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
     class NumberToken : LiteralToken
     {
-        public NumberToken(Int32 val) : base(val)
+        public NumberToken(Double val, SourceSpan location) : base(val, location)
         {
         }
     }

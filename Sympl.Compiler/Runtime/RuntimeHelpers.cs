@@ -134,13 +134,13 @@ namespace Sympl.Runtime
 
         static Cons NthCdr(Cons? lst, Int32 i)
         {
-            while (i > 0 && lst != null)
+            while (i > 0 && lst is { })
             {
                 lst = lst.Rest as Cons;
                 i--;
             }
 
-            if (i == 0 && lst != null)
+            if (i == 0 && lst is { })
             {
                 return lst;
             }
@@ -299,7 +299,7 @@ namespace Sympl.Runtime
                 ? restrictions.Merge(BindingRestrictions.GetInstanceRestriction(target.Expression, target.Value))
                 : restrictions.Merge(BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType));
 
-            return args.Select(t => t.HasValue && t.Value == null
+            return args.Select(t => t.HasValue && t.Value is null
                     ? BindingRestrictions.GetInstanceRestriction(t.Expression, null)
                     : BindingRestrictions.GetTypeRestriction(t.Expression, t.LimitType))
                 .Aggregate(restrictions, (current, r) => current.Merge(r));

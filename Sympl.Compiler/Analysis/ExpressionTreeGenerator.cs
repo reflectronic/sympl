@@ -234,16 +234,15 @@ namespace Sympl.Analysis
         /// </summary>
         public static Expression AnalyzeIdentifier(SymplIdentifier expression, AnalysisScope scope)
         {
-            if (expression.IdToken.IsKeywordToken)
+            if (expression.IdToken is KeywordToken token)
             {
-                if (expression.IdToken == KeywordToken.Nil)
-                    return Expression.Constant(null, typeof(Object));
-                else if (expression.IdToken == KeywordToken.True)
-                    return Expression.Constant(true);
-                else if (expression.IdToken == KeywordToken.False)
-                    return Expression.Constant(false);
-                else
-                    throw new InvalidOperationException("Internal: unrecognized keyword literal constant.");
+                return token.Kind switch
+                {
+                    KeywordTokenKind.Nil => Expression.Constant(null, typeof(Object)),
+                    KeywordTokenKind.True => Expression.Constant(true),
+                    KeywordTokenKind.False => Expression.Constant(true),
+                    _ => throw new InvalidOperationException("Internal: unrecognized keyword literal constant."),
+                };
             }
             else
             {
@@ -259,7 +258,7 @@ namespace Sympl.Analysis
         static Expression? FindIdDef(String name, AnalysisScope scope)
         {
             AnalysisScope? currentScope = scope;
-            while (currentScope != null && !currentScope.IsModule)
+            while (currentScope is { } && !currentScope.IsModule)
             {
                 if (currentScope.Names.TryGetValue(name, out var res))
                     return res;
@@ -340,14 +339,9 @@ namespace Sympl.Analysis
             Expression.NewArrayInit(typeof(Object),
                 Array.ConvertAll(expression.Elements, e => Expression.Convert(AnalyzeExpression(e, scope), typeof(Object)))));
 
-        public static Expression AnalyzeIf(SymplIf expression, AnalysisScope scope)
-        {
-            var alt = expression.Alternative != null ? AnalyzeExpression(expression.Alternative, scope) : Expression.Constant(false);
-
-            return Expression.Condition(WrapBooleanTest(AnalyzeExpression(expression.Test, scope)),
+        public static Expression AnalyzeIf(SymplIf expression, AnalysisScope scope) => Expression.Condition(WrapBooleanTest(AnalyzeExpression(expression.Test, scope)),
                 Expression.Convert(AnalyzeExpression(expression.Consequent, scope), typeof(Object)),
-                Expression.Convert(alt, typeof(Object)));
-        }
+                Expression.Convert(expression.Alternative is { } ? AnalyzeExpression(expression.Alternative, scope) : Expression.Constant(false), typeof(Object)));
 
         static Expression WrapBooleanTest(Expression expression)
         {
@@ -421,9 +415,11 @@ namespace Sympl.Analysis
                     // duplicate evaluation. So x Or y is translated into (Let* (tmp1 x) (If tmp1 tmp1
                     // (Let* (tmp2 y) (If tmp2 tmp2))))
 
+                    // TODO: Figure out location of synthesized tokens
+
                     var tmp2 = new IdOrKeywordToken(
                         // Real implementation needs to ensure unique ID in scope chain.
-                        "__tmpLetVariable2");
+                        "__tmpLetVariable2", default);
                     var tmpExpr2 = new SymplIdentifier(tmp2);
                     var binding2 = new SymplLetStar.LetBinding(tmp2, expression.Right);
                     SymplExpression ifExpr2 = new SymplIf(tmpExpr2, tmpExpr2, null);
@@ -431,7 +427,7 @@ namespace Sympl.Analysis
 
                     var tmp1 = new IdOrKeywordToken(
                         // Real implementation needs to ensure unique ID in scope chain.
-                        "__tmpLetVariable1");
+                        "__tmpLetVariable1", default);
                     var tmpExpr1 = new SymplIdentifier(tmp1);
                     var binding1 = new SymplLetStar.LetBinding(tmp1, expression.Left);
                     SymplExpression ifExpr1 = new SymplIf(tmpExpr1, tmpExpr1, letExpr2);

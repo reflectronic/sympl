@@ -35,7 +35,7 @@ namespace Sympl.Binders
             }
 
             var type = target.Value as Type;
-            Debug.Assert(type != null);
+            Debug.Assert(type is { });
             var constructors = type.GetConstructors();
             // Get constructors with right arg counts.
 

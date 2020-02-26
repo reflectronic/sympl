@@ -2,7 +2,7 @@
 
 namespace Sympl
 {
-    public sealed class SymplOptions : ConsoleOptions
+    sealed class SymplOptions : ConsoleOptions
     {
         public SymplOptions()
         {

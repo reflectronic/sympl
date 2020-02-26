@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Scripting;
 using Sympl.Analysis;
 using Sympl.Runtime;
 
@@ -16,13 +17,11 @@ namespace Sympl.Syntax
     /// </remarks>
     public class IdOrKeywordToken : Token
     {
-        public IdOrKeywordToken(String id)
+        public IdOrKeywordToken(String id, SourceSpan location) : base(location)
         {
             Name = id;
         }
 
         public String Name { get; }
-
-        public virtual Boolean IsKeywordToken => false;
     }
 }

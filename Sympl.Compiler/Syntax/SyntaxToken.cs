@@ -1,24 +1,19 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
     class SyntaxToken : Token
     {
-        readonly SyntaxTokenKind kind;
+        public SyntaxTokenKind Kind { get; }
 
-        SyntaxToken(SyntaxTokenKind kind)
+        public static SyntaxToken Eof { get; } = new SyntaxToken(SyntaxTokenKind.Eof, default);
+
+        public SyntaxToken(SyntaxTokenKind kind, SourceSpan location) : base(location)
         {
-            this.kind = kind;
+            Kind = kind;
         }
 
-        public override String ToString() => $"<SyntaxToken {kind.ToString()}>";
-
-        public static SyntaxToken Paren = new SyntaxToken(SyntaxTokenKind.Paren);
-
-        public static SyntaxToken CloseParen = new SyntaxToken(SyntaxTokenKind.CloseParen);
-
-        public static SyntaxToken EOF = new SyntaxToken(SyntaxTokenKind.EOF);
-        public static SyntaxToken Quote = new SyntaxToken(SyntaxTokenKind.Quote);
-        public static SyntaxToken Dot = new SyntaxToken(SyntaxTokenKind.Dot);
+        public override String ToString() => $"<SyntaxToken {Kind}>";
     }
 }

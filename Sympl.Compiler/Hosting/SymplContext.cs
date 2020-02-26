@@ -58,6 +58,10 @@ namespace Sympl.Hosting
                     case SourceCodeKind.SingleStatement:
                     case SourceCodeKind.InteractiveCode:
                     case SourceCodeKind.AutoDetect:
+
+                        // TODO: Find a way to avoid generating the expression when we aren't interested in it
+                        // (e.g. REPL newline handling/tab completion)
+
                         return new SymplCode(sympl, sympl.ParseExprToLambda(reader), sourceUnit);
                     case SourceCodeKind.File:
                         return new SymplCode(sympl, sympl.ParseFileToLambda(sourceUnit.Path, reader), sourceUnit);
@@ -76,6 +80,7 @@ namespace Sympl.Hosting
                 // Real language implementation would have a specific type of exception. Also,
                 // they would pass errorSink down into the parser and add messages while doing
                 // tighter error recovery and continuing to parse.
+
                 errorSink.Add(sourceUnit, e.Message, SourceSpan.None, 0, Severity.FatalError);
                 return null;
             }

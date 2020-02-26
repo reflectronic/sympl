@@ -5,9 +5,9 @@ namespace Sympl.Syntax
     /// </summary>
     enum SyntaxTokenKind
     {
-        Paren,
-        CloseParen,
-        EOF,
+        OpenParenthesis,
+        CloseParenthesis,
+        Eof,
         Quote,
         Dot,
     }
