@@ -1,4 +1,3 @@
-
 using System;
 using System.Dynamic;
 using System.Linq.Expressions;
@@ -49,7 +48,6 @@ namespace Sympl.Binders
             var callArgs = RuntimeHelpers.ConvertArguments(args, parameters);
             var expression = Expression.Invoke(Expression.Convert(target.Expression, target.LimitType), callArgs);
             return new DynamicMetaObject(RuntimeHelpers.EnsureObjectResult(expression), BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType));
-
         }
     }
 }

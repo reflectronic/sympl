@@ -8,12 +8,12 @@ using Sympl.Runtime;
 
 namespace Sympl.Syntax
 {
-    public class Parser
+    public static class Parser
     {
         /// <summary>
         /// Returns an array of top-level expressions parsed in the <paramref name="reader"/>.
         /// </summary>
-        public SymplExpression[] ParseFile(TextReader reader)
+        public static SymplExpression[] ParseFile(TextReader reader)
         {
             if (reader is null)
                 throw new ArgumentNullException(nameof(reader));
@@ -34,7 +34,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Returns a single expression parsed from the <paramref name="reader"/>.
         /// </summary>
-        public SymplExpression ParseSingleExpression(TextReader reader)
+        public static SymplExpression ParseSingleExpression(TextReader reader)
         {
             if (reader is null)
                 throw new ArgumentNullException(nameof(reader));
@@ -45,7 +45,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses an expression from the Lexer passed in.
         /// </summary>  
-        SymplExpression ParseExpression(Lexer lexer)
+        static SymplExpression ParseExpression(Lexer lexer)
         {
             var token = lexer.GetToken();
 
@@ -94,7 +94,7 @@ namespace Sympl.Syntax
         /// try, etc. If the first sub expression is another parenthetic form, then it must be an
         /// expression that returns a callable object.
         /// </devdoc>
-        SymplExpression ParseParentheticForm(Lexer lexer)
+        static SymplExpression ParseParentheticForm(Lexer lexer)
         {
             MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
 
@@ -107,7 +107,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses parenthetic built in forms such as defun, if, loop, etc.
         /// </summary>
-        SymplExpression ParseKeywordForm(Lexer lexer)
+        static SymplExpression ParseKeywordForm(Lexer lexer)
         {
             var name = lexer.GetToken();
             if (!(name is KeywordToken keyword))
@@ -148,7 +148,7 @@ namespace Sympl.Syntax
             };
         }
 
-        SymplExpression ParseDefun(Lexer lexer)
+        static SymplExpression ParseDefun(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Defun);
 
@@ -160,16 +160,16 @@ namespace Sympl.Syntax
             return new SymplDefun(idOrKeyword.Name, ParseParams(lexer, "Defun"), ParseBody(lexer, $"Hit EOF in function body{idOrKeyword.Name}"));
         }
 
-        SymplExpression ParseLambda(Lexer lexer)
+        static SymplExpression ParseLambda(Lexer lexer)
         {
-            var token = MatchToken(lexer, KeywordTokenKind.Lambda);
+            MatchToken(lexer, KeywordTokenKind.Lambda);
             return new SymplLambda(ParseParams(lexer, "Lambda"), ParseBody(lexer, "Hit EOF in function body"));
         }
 
         /// <summary>
         /// Parses a sequence of vars for Defuns and Lambdas, and always returns a list of IdTokens.
         /// </summary>
-        IdOrKeywordToken[] ParseParams(Lexer lexer, String definer)
+        static IdOrKeywordToken[] ParseParams(Lexer lexer, String definer)
         {
             var token = MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
 
@@ -181,7 +181,7 @@ namespace Sympl.Syntax
         /// Parses a sequence of expressions as for Defun, Let, etc., and always returns a list, even
         /// if empty. It gobbles the close paren too.
         /// </summary>
-        SymplExpression[] ParseBody(Lexer lexer, String error)
+        static SymplExpression[] ParseBody(Lexer lexer, String error)
         {
             var token = lexer.GetToken();
             var body = new List<SymplExpression>();
@@ -200,7 +200,7 @@ namespace Sympl.Syntax
 
         // (import id[.id]* [{id | (id [id]*)} [{id | (id [id]*)}]] ) (import file-or-dotted-Ids
         // name-or-list-of-members reanme-or-list-of)
-        SymplExpression ParseImport(Lexer lexer)
+        static SymplExpression ParseImport(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Import);
 
@@ -218,12 +218,12 @@ namespace Sympl.Syntax
         }
 
         /// <summary>
-        /// Parses dotted namespaces or <see cref="SymplRuntime" /> members to import.
+        /// Parses dotted namespaces or <see cref="CodeContext" /> members to import.
         /// </summary>
-        IdOrKeywordToken[] ParseImportNameOrModule(Lexer lexer)
+        static IdOrKeywordToken[] ParseImportNameOrModule(Lexer lexer)
         {
             var token = lexer.GetToken();
-            if (!(token is IdOrKeywordToken))
+            if (!(token is IdOrKeywordToken idOrKeyword))
                 // Keywords are ok here.
                 throw new SymplParseException("Id must follow Import symbol");
 
@@ -231,24 +231,25 @@ namespace Sympl.Syntax
             var nsOrModule = new List<IdOrKeywordToken>();
             if (dot.IsSyntaxToken(SyntaxTokenKind.Dot))
             {
+                nsOrModule.Add(idOrKeyword);
                 lexer.PutToken(dot);
-                var tmp = ParseDottedExpression(lexer, new SymplIdentifier((IdOrKeywordToken) token));
+                var tmp = ParseDottedExpression(lexer, new SymplIdentifier(idOrKeyword));
                 foreach (var e in tmp.Expressions)
                 {
-                    if (!(e is SymplIdentifier))
+                    if (!(e is SymplIdentifier id))
                     {
                         // Keywords are ok here.
                         throw new SymplParseException($"Import targets must be dotted identifiers.{e}{nsOrModule}");
                     }
 
-                    nsOrModule.Add(((SymplIdentifier) e).IdToken);
+                    nsOrModule.Add(id.IdToken);
                 }
 
                 token = lexer.GetToken();
             }
             else
             {
-                nsOrModule.Add((IdOrKeywordToken) token);
+                nsOrModule.Add(idOrKeyword);
                 token = dot;
             }
 
@@ -258,9 +259,9 @@ namespace Sympl.Syntax
 
         /// <summary> Parses list of member names to import from the object represented in the result
         /// of <see cref="ParseImportNameOrModule(Lexer)" />, which will be a file module or object
-        /// from <see cref="SymplRuntime.Globals" />. This is also used to parse the list of renames for
+        /// from <see cref="CodeContext.Globals" />. This is also used to parse the list of renames for
         /// these same members. </summary>
-        IdOrKeywordToken[] ParseImportNames(Lexer lexer, String nameKinds, Boolean allowKeywords)
+        static IdOrKeywordToken[] ParseImportNames(Lexer lexer, String nameKinds, Boolean allowKeywords)
         {
             var token = lexer.GetToken();
             var names = new List<IdOrKeywordToken>();
@@ -305,7 +306,7 @@ namespace Sympl.Syntax
         /// accesses must be dotted identifier expressions or member invokes -- a.b.(c 3).d. The
         /// member invokes cannot have dotted expressions for the member name such as a.(b.c 3).
         /// </devdoc>
-        SymplDot ParseDottedExpression(Lexer lexer, SymplExpression objExpr)
+        static SymplDot ParseDottedExpression(Lexer lexer, SymplExpression objExpr)
         {
             MatchToken(lexer, SyntaxTokenKind.Dot);
 
@@ -322,7 +323,7 @@ namespace Sympl.Syntax
                     expression = new SymplIdentifier(keywordToken);
                 }
                 else
-                {
+                { 
                     lexer.PutToken(token);
                     expression = ParseParentheticForm(lexer);
                     if (expression is SymplCall funCall && !(funCall.Function is SymplIdentifier))
@@ -341,7 +342,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses a LHS expression and value expression. All analysis on the LHS is in etgen.py.
         /// </summary>
-        SymplAssignment ParseSet(Lexer lexer)
+        static SymplAssignment ParseSet(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Set);
 
@@ -356,7 +357,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses <c>(let* (([var] [expression])*) [body]).</c>
         /// </summary>
-        SymplLetStar ParseLetStar(Lexer lexer)
+        static SymplLetStar ParseLetStar(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.LetStar);
             MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
@@ -386,7 +387,7 @@ namespace Sympl.Syntax
         /// Parses a block expression, a sequence of exprs to execute in order, returning the last
         /// expression's value.
         /// </summary>
-        SymplBlock ParseBlock(Lexer lexer)
+        static SymplBlock ParseBlock(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Block);
 
@@ -401,7 +402,7 @@ namespace Sympl.Syntax
         /// member (or a get member and call, which the runtime binder decides). The non-dotted expression
         /// simply evals to an object that better be callable with the supplied args, which may be none.
         /// </devdoc>
-        SymplCall ParseFunctionCall(Lexer lexer)
+        static SymplCall ParseFunctionCall(Lexer lexer)
         {
             // First sub expression is callable object or invoke member expression.
             var fun = ParseExpression(lexer);
@@ -417,7 +418,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses a quoted list, ID/keyword, or literal.
         /// </summary>
-        SymplQuote ParseQuoteExpression(Lexer lexer)
+        static SymplQuote ParseQuoteExpression(Lexer lexer)
         {
             MatchToken(lexer, SyntaxTokenKind.Quote);
 
@@ -441,7 +442,7 @@ namespace Sympl.Syntax
             return new SymplQuote(expression);
         }
 
-        SymplEq ParseEq(Lexer lexer)
+        static SymplEq ParseEq(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Eq);
 
@@ -449,7 +450,7 @@ namespace Sympl.Syntax
             return new SymplEq(left, right);
         }
 
-        SymplCons ParseCons(Lexer lexer)
+        static SymplCons ParseCons(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Cons);
 
@@ -460,7 +461,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses two exprs and a close paren, returning the two exprs.
         /// </summary>
-        void ParseBinaryRuntimeCall(Lexer lexer, out SymplExpression left, out SymplExpression right)
+        static void ParseBinaryRuntimeCall(Lexer lexer, out SymplExpression left, out SymplExpression right)
         {
             left = ParseExpression(lexer);
             right = ParseExpression(lexer);
@@ -471,14 +472,14 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses a call to the List built-in keyword form that takes any number of arguments.
         /// </summary>
-        SymplListCall ParseListCall(Lexer lexer)
+        static SymplListCall ParseListCall(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.List);
 
             return new SymplListCall(ParseBody(lexer, "Unexpected EOF in arg list for call to List."));
         }
 
-        SymplIf ParseIf(Lexer lexer)
+        static SymplIf ParseIf(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.If);
 
@@ -495,7 +496,7 @@ namespace Sympl.Syntax
         /// Parses a loop expression, a sequence of exprs to execute in order, forever. See Break for
         /// returning expression's value.
         /// </summary>
-        SymplLoop ParseLoop(Lexer lexer)
+        static SymplLoop ParseLoop(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Loop);
 
@@ -504,7 +505,7 @@ namespace Sympl.Syntax
 
         /// <summary> Parses a Break expression, which has an optional value that becomes a loop
         /// expression's value. </summary>
-        SymplBreak ParseBreak(Lexer lexer)
+        static SymplBreak ParseBreak(Lexer lexer)
         {
             MatchToken(lexer, KeywordTokenKind.Break);
 
@@ -534,9 +535,9 @@ namespace Sympl.Syntax
         /// generic type instances. Without this support SymPL programmers need to open code this as
         /// the examples show.
         /// </devdoc>
-        SymplNew ParseNew(Lexer lexer)
+        static SymplNew ParseNew(Lexer lexer)
         {
-            var token = MatchToken(lexer, KeywordTokenKind.New);
+            MatchToken(lexer, KeywordTokenKind.New);
 
             return new SymplNew(ParseExpression(lexer), ParseBody(lexer, "Unexpected EOF in arg list for call to New."));
         }
@@ -549,11 +550,11 @@ namespace Sympl.Syntax
         /// have macros one day. This is used for Import name parsing, Defun/Lambda params, and
         /// quoted lists.
         /// </devdoc>
-        SymplList ParseList(Lexer lexer, String errStr)
+        static SymplList ParseList(Lexer lexer, String errStr)
         {
-            var token = MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
+            MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
 
-            token = lexer.GetToken();
+            var token = lexer.GetToken();
             var res = new List<Object>();
             while (token != SyntaxToken.Eof && !token.IsSyntaxToken(SyntaxTokenKind.CloseParenthesis))
             {
@@ -593,9 +594,9 @@ namespace Sympl.Syntax
             return new SymplList(res.ToArray());
         }
 
-        public SymplElt ParseElt(Lexer lexer)
+        static public SymplElt ParseElt(Lexer lexer)
         {
-            var token = lexer.GetToken();
+            MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
             MatchToken(lexer, KeywordTokenKind.Elt);
 
             return new SymplElt(ParseExpression(lexer), ParseBody(lexer, "Unexpected EOF in arg list for call to Elt."));
@@ -604,7 +605,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses a BinaryOp expression.
         /// </summary>
-        SymplBinary ParseBinaryExpression(Lexer lexer)
+        static SymplBinary ParseBinaryExpression(Lexer lexer)
         {
             if (!(lexer.GetToken() is KeywordToken keyword))
                 throw new SymplParseException("Internal error: parsing Binary?");
@@ -616,7 +617,7 @@ namespace Sympl.Syntax
         /// <summary>
         /// Parses a UnaryOp expression.
         /// </summary>
-        SymplUnary ParseUnaryExpression(Lexer lexer)
+        static SymplUnary ParseUnaryExpression(Lexer lexer)
         {
             if (!(lexer.GetToken() is KeywordToken keyword))
                 throw new SymplParseException("Internal error: parsing Unary?");
@@ -629,7 +630,7 @@ namespace Sympl.Syntax
             return new SymplUnary(operand, op);
         }
 
-        Token MatchToken(Lexer lexer, SyntaxTokenKind kind)
+        static Token MatchToken(Lexer lexer, SyntaxTokenKind kind)
         {
             var token = lexer.GetToken();
             if (!token.IsSyntaxToken(kind))
@@ -638,7 +639,7 @@ namespace Sympl.Syntax
             return token;
         }
 
-        Token MatchToken(Lexer lexer, KeywordTokenKind kind)
+        static Token MatchToken(Lexer lexer, KeywordTokenKind kind)
         {
             var token = lexer.GetToken();
             if (!token.IsKeywordToken(kind))

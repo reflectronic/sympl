@@ -29,15 +29,15 @@ namespace Sympl.Runtime
             if (GetSites.TryGetValue(name, out var site)) 
                 return site.Target(site, o);
             
-            site = CallSite<Func<CallSite, Object, Object>>.Create(new DoHelpersGetMemberBinder(name));
+            site = CallSite<Func<CallSite, Object, Object>>.Create(new DynamicObjectHelpersGetMemberBinder(name));
             GetSites[name] = site;
 
             return site.Target(site, o);
         }
 
-        class DoHelpersGetMemberBinder : GetMemberBinder
+        class DynamicObjectHelpersGetMemberBinder : GetMemberBinder
         {
-            internal DoHelpersGetMemberBinder(String name) : base(name, true)
+            internal DynamicObjectHelpersGetMemberBinder(String name) : base(name, true)
             {
             }
 
@@ -54,16 +54,16 @@ namespace Sympl.Runtime
         {
             if (!SetSites.TryGetValue(name, out var site))
             {
-                site = CallSite<Action<CallSite, Object, Object>>.Create(new DoHelpersSetMemberBinder(name));
+                site = CallSite<Action<CallSite, Object, Object>>.Create(new DynamicObjectHelpersSetMemberBinder(name));
                 SetSites[name] = site;
             }
 
             site.Target(site, o, value);
         }
 
-        class DoHelpersSetMemberBinder : SetMemberBinder
+        class DynamicObjectHelpersSetMemberBinder : SetMemberBinder
         {
-            internal DoHelpersSetMemberBinder(String name) : base(name, true)
+            internal DynamicObjectHelpersSetMemberBinder(String name) : base(name, true)
             {
             }
 

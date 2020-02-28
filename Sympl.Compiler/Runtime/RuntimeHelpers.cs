@@ -34,43 +34,38 @@ namespace Sympl.Runtime
         /// <param name="renames">
         /// a list of names to add to <paramref name="module"/> instead of <paramref name="names"/>.
         /// </param>
-        public static Object? Import(SymplRuntime runtime, IDynamicMetaObjectProvider module, String[] what, String[] names, String[] renames)
+        public static Object? Import(CodeContext context, IDynamicMetaObjectProvider module, String[] what, String[] names, String[] renames)
         {
             Object value;
             // Get object or file scope.
             if (what.Length == 1)
             {
                 var name = what[0];
-                if (DynamicObjectHelpers.HasMember(runtime.Globals, name))
+                if (DynamicObjectHelpers.HasMember(context.Globals, name))
                 {
-                    value = DynamicObjectHelpers.GetMember(runtime.Globals, name);
+                    value = DynamicObjectHelpers.GetMember(context.Globals, name);
                     // Since runtime.Globals has Sympl's reflection of namespaces and types, we pick
                     // those up first above and don't risk hitting a NamespaceTracker for assemblies
                     // added when we initialized Sympl. The next check will correctly look up
                     // case-INsensitively for globals the host adds to ScriptRuntime.Globals.
                 }
-                else if (DynamicObjectHelpers.HasMember(runtime.DlrGlobals, name))
+                else if (DynamicObjectHelpers.HasMember(context.DlrGlobals, name))
                 {
-                    value = DynamicObjectHelpers.GetMember(runtime.DlrGlobals, name);
+                    value = DynamicObjectHelpers.GetMember(context.DlrGlobals, name);
                 }
                 else
                 {
-                    var f = (String) DynamicObjectHelpers.GetMember(module, "__file__");
-                    f = Path.Combine(Path.GetDirectoryName(f)!, $"{name}.sympl");
-                    if (File.Exists(f))
-                    {
-                        value = runtime.ExecuteFile(f);
-                    }
-                    else
-                    {
-                        throw new ArgumentException($"Import: can't find name in globals or as file to load -- {name} {f}");
-                    }
+                    var filename = DynamicObjectHelpers.HasMember(module, "__file__")
+                        ? Path.Combine(Path.GetDirectoryName((String) DynamicObjectHelpers.GetMember(module, "__file__")) ?? "", $"{name}.sympl")
+                        : $"{name}.sympl";
+
+                    value = context.LanguageContext.CreateFileUnit(filename).Compile().Run();
                 }
             }
             else
             {
                 // What has more than one name, must be Globals access.
-                value = what.Aggregate((Object) runtime.Globals, (current, name) => DynamicObjectHelpers.GetMember((IDynamicMetaObjectProvider) current, name));
+                value = what.Aggregate((Object) context.Globals, (current, name) => DynamicObjectHelpers.GetMember((IDynamicMetaObjectProvider) current, name));
                 // For more correctness and generality, shouldn't assume all globals are dynamic
                 // objects, or that a look up like foo.bar.baz cascades through all dynamic objects.
                 // Would need to manually create a CallSite here with Sympl's GetMemberBinder, and

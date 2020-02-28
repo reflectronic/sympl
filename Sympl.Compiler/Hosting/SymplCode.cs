@@ -18,17 +18,17 @@ namespace Sympl.Hosting
     /// </remarks>
     public sealed class SymplCode : ScriptCode
     {
-        readonly Expression<Func<SymplRuntime, IDynamicMetaObjectProvider, Object>> lambda;
+        readonly Expression<Func<CodeContext, IDynamicMetaObjectProvider, Object>> lambda;
 
-        readonly SymplRuntime symplRuntime;
-        Func<SymplRuntime, IDynamicMetaObjectProvider, Object>? compiledLambda;
+        readonly SymplContext symplContext;
+        Func<CodeContext, IDynamicMetaObjectProvider, Object>? compiledLambda;
 
-        public SymplCode(SymplRuntime symplRuntime,
-            Expression<Func<SymplRuntime, IDynamicMetaObjectProvider, Object>> lambda, SourceUnit sourceUnit) : base(
+        public SymplCode(SymplContext symplContext,
+            Expression<Func<CodeContext, IDynamicMetaObjectProvider, Object>> lambda, SourceUnit sourceUnit) : base(
             sourceUnit)
         {
             this.lambda = lambda;
-            this.symplRuntime = symplRuntime;
+            this.symplContext = symplContext;
         }
 
         public override Object Run() => Run(new Scope());
@@ -44,7 +44,7 @@ namespace Sympl.Hosting
                 DynamicObjectHelpers.SetMember(scope, "__file__", Path.GetFullPath(SourceUnit.Path));
             }
 
-            return compiledLambda(symplRuntime, scope);
+            return compiledLambda(symplContext.Context, scope);
         }
     }
 }

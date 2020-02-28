@@ -5,7 +5,7 @@ namespace Sympl.Runtime
 {
     /// <summary>
     /// This class is needed to canonicalize InvokeMemberBinders in Sympl. See the comment above the
-    /// GetXXXBinder methods at the end of the <see cref="SymplRuntime" /> class.
+    /// GetXXXBinder methods at the end of the <see cref="Hosting.SymplContext" /> class.
     /// </summary>
     public class InvokeMemberBinderKey
     {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using Sympl.Hosting;
 using Sympl.Runtime;
 
 namespace Sympl.Analysis
@@ -20,28 +21,29 @@ namespace Sympl.Analysis
     {
         readonly String name;
 
-        public AnalysisScope(AnalysisScope? parent, String name, SymplRuntime? runtime = null, ParameterExpression? runtimeParam = null, ParameterExpression? moduleParam = null)
+        public AnalysisScope(AnalysisScope? parent, String name, SymplContext? context = null, ParameterExpression? runtimeParam = null, ParameterExpression? moduleParam = null)
         {
             Parent = parent;
             this.name = name;
-            Runtime = runtime;
-            RuntimeExpr = runtimeParam;
-            ModuleExpr = moduleParam;
+            Context = context;
+            
+            Runtime = runtimeParam;
+            Module = moduleParam;   
             IsLambda = false;
         }
 
         public AnalysisScope? Parent { get; }
 
-        public ParameterExpression? ModuleExpr { get; }
+        public ParameterExpression? Module { get; }
 
-        public ParameterExpression? RuntimeExpr { get; }
+        public ParameterExpression? Runtime { get; }
 
         /// <devdoc>
         /// Need runtime for interning Symbol constants at code gen time.
         /// </devdoc>
-        public SymplRuntime? Runtime { get; }
+        public SymplContext? Context { get; }
 
-        public Boolean IsModule => ModuleExpr is { };
+        public Boolean IsModule => Module is { };
 
         /// <devdoc>
         /// Need IsLambda when support return to find tightest closing fun.
@@ -63,26 +65,26 @@ namespace Sympl.Analysis
         public Dictionary<String, ParameterExpression> Names { get; set; } =
             new Dictionary<String, ParameterExpression>(StringComparer.OrdinalIgnoreCase);
 
-        public ParameterExpression? GetModuleExpr()
+        public ParameterExpression? GetModuleExpression()
         {
             AnalysisScope? curScope = this;
-            while (curScope?.ModuleExpr is null)
+            while (curScope?.Module is null)
             {
                 curScope = curScope?.Parent;
             }
 
-            return curScope.ModuleExpr;
+            return curScope.Module;
         }
 
-        public SymplRuntime GetRuntime()
+        public SymplContext GetContext()
         {
             AnalysisScope? curScope = this;
-            while (curScope?.Runtime is null)
+            while (curScope?.Context is null)
             {
                 curScope = curScope?.Parent;
             }
 
-            return curScope.Runtime;
+            return curScope.Context;
         }
     }
 }

@@ -10,6 +10,8 @@ namespace Sympl
         protected override void ExecuteInternal()
         {
             Runtime.LoadAssembly(typeof(Console).Assembly);
+            Runtime.LoadAssembly(typeof(System.IO.Directory).Assembly);
+
             base.ExecuteInternal();
         }
 

@@ -125,7 +125,6 @@ namespace Sympl.Syntax
 
             while (!IsIdTerminator((Char) reader.Peek())) { reader.Read(); }
 
-            reader.MarkMultiLineTokenEnd();
             return MakeIdOrKeywordToken(isQuoted);
         }
 
@@ -136,6 +135,7 @@ namespace Sympl.Syntax
         /// </devdoc>
         IdOrKeywordToken MakeIdOrKeywordToken(Boolean isQuoted)
         {
+            reader.MarkMultiLineTokenEnd();
             var name = reader.GetTokenString();
             if (!isQuoted && KeywordToken.IsKeywordName(name))
             {
@@ -205,7 +205,7 @@ namespace Sympl.Syntax
             }
 
             reader.MarkMultiLineTokenEnd();
-            return new StringToken(reader.GetTokenString(), reader.TokenSpan);
+            return new StringToken(reader.GetTokenString()[1..^1], reader.TokenSpan);
         }
 
         static readonly Char[] WhitespaceChars = { ' ', '\r', '\n', ';', '\t' };
@@ -214,7 +214,15 @@ namespace Sympl.Syntax
         {
             for (var ch = reader.Peek(); Array.IndexOf(WhitespaceChars, (Char) ch) != -1; ch = reader.Peek())
             {
-                reader.Read();
+                if (ch == ';')
+                {
+                    reader.ReadLine();
+                }
+                else
+                {
+                    reader.Read();
+                }
+
             }
 
             reader.MarkMultiLineTokenEnd();
