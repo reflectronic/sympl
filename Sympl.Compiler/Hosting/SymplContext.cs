@@ -1,7 +1,3 @@
-using Microsoft.Scripting;
-using Microsoft.Scripting.Runtime;
-using Microsoft.Scripting.Utils;
-
 using System;
 using System.Collections.Generic;
 using Sympl.Runtime;
@@ -13,6 +9,9 @@ using System.Linq.Expressions;
 using Sympl.Analysis;
 using System.IO;
 using System.Reflection;
+using Microsoft.Scripting;
+using Microsoft.Scripting.Runtime;
+using Microsoft.Scripting.Utils;
 
 namespace Sympl.Hosting
 {
@@ -33,18 +32,24 @@ namespace Sympl.Hosting
     /// offer other services (exception formatting, colorization, tokenization, etc), provide
     /// ExecuteProgram semantics, and so on.
     /// </remarks>
-    public sealed class SymplContext : LanguageContext
+    public sealed partial class SymplContext : LanguageContext
     {
         internal CodeContext Context { get; private set; }
 
+        readonly HashSet<Assembly> assemblies = new HashSet<Assembly>();
+
         public SymplContext(ScriptDomainManager manager, IDictionary<String, Object> options) : base(manager)
         {
+            Options = new LanguageOptions(options);
             Context = new CodeContext(manager.Globals, this);
 
-            // TODO: Parse options
             manager.AssemblyLoaded += (sender, e) =>
             {
-                RegisterAssembly(e.Assembly);
+                if (!assemblies.Contains(e.Assembly))
+                {
+                    RegisterAssembly(e.Assembly);
+                    assemblies.Add(e.Assembly);
+                }
             };
 
             foreach (var assembly in manager.GetLoadedAssemblyList())
@@ -59,9 +64,10 @@ namespace Sympl.Hosting
         /// </remarks>
         public override ScriptCode? CompileSourceCode(SourceUnit sourceUnit, CompilerOptions options, ErrorSink errorSink)
         {
-            using var reader = sourceUnit.GetReader();
-                        // TODO: Find a way to avoid generating the expression when we aren't interested in it
-                        // (e.g. REPL newline handling/tab completion)
+            var counter = new ErrorCounter(errorSink);
+            var context = new CompilerContext(sourceUnit, options, counter);
+            // TODO: Find a way to avoid generating the expression when we aren't interested in it
+            // (e.g. REPL newline handling/tab completion)
 
             try
             {
@@ -71,7 +77,16 @@ namespace Sympl.Hosting
                     case SourceCodeKind.SingleStatement:
                     case SourceCodeKind.InteractiveCode:
                         {
-                            var ast = Parser.ParseSingleExpression(reader);
+                            var ast = Parser.ParseSingleExpression(context);
+
+                            if (counter.AnyError)
+                            {
+                                sourceUnit.CodeProperties = counter.FatalErrorCount is 0
+                                    ? ScriptCodeParseResult.IncompleteToken
+                                    : ScriptCodeParseResult.Invalid;
+
+                                return null;
+                            }
 
                             var scope = new AnalysisScope(null, "__snippet__", Context.LanguageContext,
                                 Expression.Parameter(typeof(CodeContext), nameof(CodeContext)),
@@ -88,7 +103,9 @@ namespace Sympl.Hosting
                     case SourceCodeKind.AutoDetect:
                     case SourceCodeKind.Statements:
                         {
-                            var asts = Parser.ParseFile(reader);
+                            var asts = Parser.ParseFile(context);
+
+                            if (counter.AnyError) { return null; }
 
                             var scope = new AnalysisScope(null, Path.GetFileNameWithoutExtension(sourceUnit.Path), Context.LanguageContext,
                                 Expression.Parameter(typeof(CodeContext), nameof(CodeContext)),
@@ -113,29 +130,23 @@ namespace Sympl.Hosting
             }
             catch (Exception e)
             {
-                if (e is SymplParseException pex)
-                {
-                    sourceUnit.CodeProperties = pex.ParseError;
-                }
-
-                // TODO: Propagate error sink to parser
-                // Real language implementation would have a specific type of exception. Also,
-                // they would pass errorSink down into the parser and add messages while doing
-                // tighter error recovery and continuing to parse.
-
-                errorSink.Add(sourceUnit, e.Message, SourceSpan.None, 0, Severity.FatalError);
+                errorSink.Add(sourceUnit, $"Internal error: " + e.ToString(), SourceSpan.None, 9999, Severity.FatalError);
                 return null;
             }
         }
 
+        public override LanguageOptions Options { get; }
+
         public override Version LanguageVersion { get; } = typeof(SymplContext).Assembly.GetName().Version ?? new Version(0, 0, 0, 0);
 
-        /// <remarks>
-        /// We expose the original hosting object for creating Symbols or other pre-existing uses.
-        /// </remarks>
         public override TService GetService<TService>(params Object[] args)
         {
             return base.GetService<TService>(args);
+        }
+
+        public override CompilerOptions GetCompilerOptions()
+        {
+            return new SymplCompilerOptions(Options.ExceptionDetail);
         }
 
         /// <summary>
@@ -223,6 +234,8 @@ namespace Sympl.Hosting
         // another call site performing the same operation with the same metadata could get the L2
         // cached rule rather than computing it again. For this to work, we need to place the same
         // binder instance on those functionally equivalent call sites.
+
+        // TODO: Use DefaultBinder
 
         readonly ConcurrentDictionary<String, SymplGetMemberBinder> getMemberBinders = new ConcurrentDictionary<String, SymplGetMemberBinder>(StringComparer.OrdinalIgnoreCase);
         public SymplGetMemberBinder GetGetMemberBinder(String name) => getMemberBinders.GetOrAdd(name, name => new SymplGetMemberBinder(name));

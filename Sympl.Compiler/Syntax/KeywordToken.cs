@@ -8,9 +8,13 @@ namespace Sympl.Syntax
     {
         public KeywordTokenKind Kind { get; }
 
-        KeywordToken(KeywordTokenKind kind, SourceSpan location) : base(KeywordToString[kind], location)
+        public KeywordToken(KeywordTokenKind kind, SourceSpan location) : base(KeywordToString[kind], location)
         {
             Kind = kind;
+        }
+
+        public KeywordToken(SourceSpan location) : base(location)
+        {
         }
 
         static readonly Dictionary<String, KeywordTokenKind> StringToKeyword = new Dictionary<String, KeywordTokenKind>(StringComparer.OrdinalIgnoreCase)

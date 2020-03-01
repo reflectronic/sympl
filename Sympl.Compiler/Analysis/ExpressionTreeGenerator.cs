@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq.Expressions;
+using Microsoft.Scripting;
 using Sympl.Expressions;
 using Sympl.Hosting;
 using Sympl.Runtime;
@@ -420,7 +421,7 @@ namespace Sympl.Analysis
 
                     var tmp2 = new IdOrKeywordToken(
                         // Real implementation needs to ensure unique ID in scope chain.
-                        "__tmpLetVariable2", default);
+                        "__tmpLetVariable2", SourceSpan.None);
                     var tmpExpr2 = new SymplIdentifier(tmp2);
                     var binding2 = new SymplLetStar.LetBinding(tmp2, expression.Right);
                     SymplExpression ifExpr2 = new SymplIf(tmpExpr2, tmpExpr2, null);
@@ -428,7 +429,7 @@ namespace Sympl.Analysis
 
                     var tmp1 = new IdOrKeywordToken(
                         // Real implementation needs to ensure unique ID in scope chain.
-                        "__tmpLetVariable1", default);
+                        "__tmpLetVariable1", SourceSpan.None);
                     var tmpExpr1 = new SymplIdentifier(tmp1);
                     var binding1 = new SymplLetStar.LetBinding(tmp1, expression.Left);
                     SymplExpression ifExpr1 = new SymplIf(tmpExpr1, tmpExpr1, letExpr2);

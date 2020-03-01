@@ -5,6 +5,7 @@ namespace Sympl.Syntax
     /// </summary>
     enum SyntaxTokenKind
     {
+        Invalid,
         OpenParenthesis,
         CloseParenthesis,
         Eof,

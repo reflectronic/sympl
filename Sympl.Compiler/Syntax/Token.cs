@@ -1,14 +1,18 @@
+using System;
 using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
     public abstract class Token
     {
-        protected Token(SourceSpan location)
+        protected Token(SourceSpan location, Boolean synthesized)
         {
-            SourceLocation = location;
+            Location = location;
+            IsSynthesized = synthesized;
         }
 
-        public SourceSpan SourceLocation { get; }
+        public SourceSpan Location { get; }
+
+        public Boolean IsSynthesized { get; }
     }
 }

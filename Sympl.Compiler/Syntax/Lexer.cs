@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.IO;
 using Microsoft.Scripting;
 using Microsoft.Scripting.Runtime;
 
@@ -10,14 +9,20 @@ namespace Sympl.Syntax
     {
         Token? putToken;
         readonly TokenizerBuffer reader;
+        readonly SourceCodeReader sourceCode;
+
+        public CompilerContext Context { get; }
+
         const Char EOF = unchecked((Char) (-1));
 
-        public Lexer(TextReader reader)
+        public Lexer(CompilerContext context)
         {
-            if (reader is null)
-                throw new ArgumentNullException(nameof(reader));
+            if (context is null)
+                throw new ArgumentNullException(nameof(context));
 
-            this.reader = new TokenizerBuffer(reader, new SourceLocation(0, 1, 1), 4, true);
+            Context = context;
+            sourceCode = context.SourceUnit.GetReader();
+            reader = new TokenizerBuffer(sourceCode, new SourceLocation(0, 1, 1), 4, true);
         }
 
         public void PutToken(Token token)
@@ -55,19 +60,19 @@ namespace Sympl.Syntax
                     return SyntaxToken.Eof;
                 case '(':
                     reader.Read();
-                    reader.MarkMultiLineTokenEnd();
+                    reader.MarkSingleLineTokenEnd();
                     return new SyntaxToken(SyntaxTokenKind.OpenParenthesis, reader.TokenSpan);
                 case ')':
                     reader.Read();
-                    reader.MarkMultiLineTokenEnd();
+                    reader.MarkSingleLineTokenEnd();
                     return new SyntaxToken(SyntaxTokenKind.CloseParenthesis, reader.TokenSpan);
                 case '.':
                     reader.Read();
-                    reader.MarkMultiLineTokenEnd();
+                    reader.MarkSingleLineTokenEnd();
                     return new SyntaxToken(SyntaxTokenKind.Dot, reader.TokenSpan);
                 case '\'':
                     reader.Read();
-                    reader.MarkMultiLineTokenEnd();
+                    reader.MarkSingleLineTokenEnd();
                     return new SyntaxToken(SyntaxTokenKind.Quote, reader.TokenSpan);
                 case var _ when IsNumChar(ch):
                     return GetNumber();
@@ -135,7 +140,7 @@ namespace Sympl.Syntax
         /// </devdoc>
         IdOrKeywordToken MakeIdOrKeywordToken(Boolean isQuoted)
         {
-            reader.MarkMultiLineTokenEnd();
+            reader.MarkSingleLineTokenEnd();
             var name = reader.GetTokenString();
             if (!isQuoted && KeywordToken.IsKeywordName(name))
             {
@@ -143,12 +148,9 @@ namespace Sympl.Syntax
             }
             else
             {
-                // TODO: Add to error sink
                 if (name.Equals("let", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine();
-                    Console.WriteLine("WARNING: using 'let'?  You probably meant let*.");
-                    Console.WriteLine();
+                    Context.Errors.Add(Context.SourceUnit, "Using 'let'? You probably meant 'let*'.", reader.TokenSpan, 200, Severity.Warning);
                 }
 
                 return new IdOrKeywordToken(name, reader.TokenSpan);
@@ -174,7 +176,7 @@ namespace Sympl.Syntax
         {
             // Check integrity before loop to avoid accidentally returning zero.
             while (IsNumChar((Char) reader.Peek())) { reader.Read();  }
-            reader.MarkMultiLineTokenEnd();
+            reader.MarkSingleLineTokenEnd();
 
             return new NumberToken(Double.Parse(reader.GetTokenString(), CultureInfo.InvariantCulture), reader.TokenSpan);
         }
@@ -189,22 +191,28 @@ namespace Sympl.Syntax
 
             while (true)
             {
-                var ch = (Char) reader.Read();
+                var ch = (Char) reader.Peek();
 
                 if (ch == EOF)
                 {
-                    throw new SymplParseException("Hit EOF in string literal.");
+                    reader.MarkSingleLineTokenEnd();
+                    Context.Errors.Add(Context.SourceUnit, "Unexpected EOF in string literal", reader.TokenSpan, 100, Severity.FatalError);
+                    break;
                 }
 
                 if (reader.IsEoln(ch))
                 {
-                    throw new SymplParseException("Hit error in error error.");
+                    reader.MarkSingleLineTokenEnd();
+                    Context.Errors.Add(Context.SourceUnit, "Unexpected newline in string literal", reader.TokenSpan, 100, Severity.FatalError);
+                    break;
                 }
+
+                reader.Read();
 
                 if (ch == '"') break;
             }
 
-            reader.MarkMultiLineTokenEnd();
+            reader.MarkSingleLineTokenEnd();
             return new StringToken(reader.GetTokenString()[1..^1], reader.TokenSpan);
         }
 

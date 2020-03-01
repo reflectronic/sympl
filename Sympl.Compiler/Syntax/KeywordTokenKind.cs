@@ -2,6 +2,7 @@
 {
     enum KeywordTokenKind
     {
+        Invalid,
         Import,
         Defun,
         Lambda,

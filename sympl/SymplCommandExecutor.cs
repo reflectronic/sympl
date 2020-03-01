@@ -15,6 +15,8 @@ namespace Sympl
 
         public Object? Execute(CompiledCode compiledCode, ScriptScope scope)
         {
+            if (compiledCode is null) return null;
+
             Object? result = compiledCode.Execute(scope);
             if (result is { })
                 Console.WriteLine(result.ToString(), Style.Out);

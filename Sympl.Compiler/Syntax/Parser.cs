@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq.Expressions;
+using System.Reflection.Emit;
 using Microsoft.Scripting;
+using Microsoft.Scripting.Runtime;
+using Microsoft.Scripting.Utils;
 using Sympl.Expressions;
+using Sympl.Hosting;
 using Sympl.Runtime;
 
 namespace Sympl.Syntax
@@ -13,20 +17,20 @@ namespace Sympl.Syntax
         /// <summary>
         /// Returns an array of top-level expressions parsed in the <paramref name="reader"/>.
         /// </summary>
-        public static SymplExpression[] ParseFile(TextReader reader)
+        public static SymplExpression[] ParseFile(CompilerContext context)
         {
-            if (reader is null)
-                throw new ArgumentNullException(nameof(reader));
+            if (context is null)
+                throw new ArgumentNullException(nameof(context));
 
-            var lexer = new Lexer(reader);
+            var lexer = new Lexer(context);
             var body = new List<SymplExpression>();
             var token = lexer.GetToken();
-            while (token != SyntaxToken.Eof)
+            do
             {
                 lexer.PutToken(token);
                 body.Add(ParseExpression(lexer));
                 token = lexer.GetToken();
-            }
+            } while (token != SyntaxToken.Eof);
 
             return body.ToArray();
         }
@@ -34,12 +38,12 @@ namespace Sympl.Syntax
         /// <summary>
         /// Returns a single expression parsed from the <paramref name="reader"/>.
         /// </summary>
-        public static SymplExpression ParseSingleExpression(TextReader reader)
+        public static SymplExpression ParseSingleExpression(CompilerContext context)
         {
-            if (reader is null)
-                throw new ArgumentNullException(nameof(reader));
+            if (context is null)
+                throw new ArgumentNullException(nameof(context));
 
-            return ParseExpression(new Lexer(reader));
+            return ParseExpression(new Lexer(context));
         }
 
         /// <summary>
@@ -49,10 +53,7 @@ namespace Sympl.Syntax
         {
             var token = lexer.GetToken();
 
-            SymplExpression? res = null;
-            if (token == SyntaxToken.Eof)
-                throw new SymplParseException("Unexpected EOF encountered while parsing expression.", ScriptCodeParseResult.IncompleteToken);
-
+            SymplExpression res;
             switch (token)
             {
                 case SyntaxToken { Kind: SyntaxTokenKind.Quote }:
@@ -66,24 +67,29 @@ namespace Sympl.Syntax
                 case KeywordToken keywordToken when keywordToken.Kind != KeywordTokenKind.Nil &&
                                                    keywordToken.Kind != KeywordTokenKind.True &&
                                                    keywordToken.Kind != KeywordTokenKind.False:
-                    throw new InvalidCastException("Keyword cannot be an expression");
+                    res = new SymplIdentifier(keywordToken);
+                    ReportDiagnostic(lexer, "Keyword cannot be an identifier.", keywordToken.Location, 100);
+                    break;
                 case IdOrKeywordToken idOrKeywordToken:
                     res = new SymplIdentifier(idOrKeywordToken);
                     break;
                 case LiteralToken literalToken:
                     res = new SymplLiteral(literalToken.Value);
                     break;
+                case var eof when eof == SyntaxToken.Eof:
+                    res = new SymplIdentifier(new KeywordToken(KeywordTokenKind.Nil, SourceSpan.None));
+                    lexer.Context.SourceUnit.CodeProperties = ScriptCodeParseResult.Empty;
+                    break;
+                default:
+                    lexer.PutToken(token);
+                    res = new SymplIdentifier(MatchToken<IdOrKeywordToken>(lexer));
+                    break;
             }
-
-            // check for dotted expression
-            if (res is null)
-                throw new SymplParseException(
-                    $"Unexpected token when expecting beginning of expression -- {token} ... {lexer.GetToken()}{lexer.GetToken()}{lexer.GetToken()}{lexer.GetToken()}");
             
             var next = lexer.GetToken();
             lexer.PutToken(next);
 
-            return next.IsSyntaxToken(SyntaxTokenKind.Dot) ? ParseDottedExpression(lexer, res) : res;
+            return next is SyntaxToken { Kind: SyntaxTokenKind.Dot } ? ParseDottedExpression(lexer, res) : res;
         }
 
         /// <summary>
@@ -109,11 +115,9 @@ namespace Sympl.Syntax
         /// </summary>
         static SymplExpression ParseKeywordForm(Lexer lexer)
         {
-            var name = lexer.GetToken();
-            if (!(name is KeywordToken keyword))
-                throw new SymplParseException("Internal error: parsing keyword form?");
+            var keyword = MatchToken<KeywordToken>(lexer);
 
-            lexer.PutToken(name);
+            lexer.PutToken(keyword);
 
             if (keyword.Kind == KeywordTokenKind.Add ||
                 keyword.Kind == KeywordTokenKind.Subtract ||
@@ -144,7 +148,7 @@ namespace Sympl.Syntax
                 KeywordTokenKind.Break => ParseBreak(lexer),
                 KeywordTokenKind.Elt => ParseElt(lexer),
                 KeywordTokenKind.Not => ParseUnaryExpression(lexer),
-                _ => throw new SymplParseException("Internal: unrecognized keyword form?"),
+                _ => throw new InvalidOperationException("Internal: unrecognized keyword form?"),
             };
         }
 
@@ -152,10 +156,10 @@ namespace Sympl.Syntax
         {
             MatchToken(lexer, KeywordTokenKind.Defun);
 
-            var name = lexer.GetToken();
+            var idOrKeyword = MatchToken<IdOrKeywordToken>(lexer);
 
-            if (name is KeywordToken || !(name is IdOrKeywordToken idOrKeyword))
-                throw new SymplParseException($"Defun must have an ID for name -- {name}");
+            if (idOrKeyword is KeywordToken)
+                ReportDiagnostic(lexer, "Defun must not have a keyword for name.", idOrKeyword, 100);
 
             return new SymplDefun(idOrKeyword.Name, ParseParams(lexer, "Defun"), ParseBody(lexer, $"Hit EOF in function body{idOrKeyword.Name}"));
         }
@@ -174,7 +178,7 @@ namespace Sympl.Syntax
             var token = MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
 
             lexer.PutToken(token);
-            return EnsureListOfIds(ParseList(lexer, "param list.").Elements, false, $"{definer} params must be valid IDs.");
+            return EnsureListOfIds(lexer, ParseList(lexer, "param list.").Elements, false, $"{definer} params must be valid IDs.");    
         }
 
         /// <summary>
@@ -186,14 +190,14 @@ namespace Sympl.Syntax
             var token = lexer.GetToken();
             var body = new List<SymplExpression>();
 
-            for (; token != SyntaxToken.Eof && !token.IsSyntaxToken(SyntaxTokenKind.CloseParenthesis); token = lexer.GetToken())
+            for (; token != SyntaxToken.Eof && !(token is SyntaxToken { Kind: SyntaxTokenKind.CloseParenthesis }); token = lexer.GetToken())
             {
                 lexer.PutToken(token);
                 body.Add(ParseExpression(lexer));
             }
 
             if (token == SyntaxToken.Eof)
-                throw new SymplParseException(error, ScriptCodeParseResult.IncompleteToken);
+                ReportDiagnostic(lexer, error, SourceSpan.None, 100, Severity.Error);
 
             return body.ToArray();
         }
@@ -208,11 +212,11 @@ namespace Sympl.Syntax
             var members = ParseImportNames(lexer, "member names", true);
             var asNames = ParseImportNames(lexer, "renames", false);
 
-            if (members.Length != asNames.Length && asNames.Length != 0)
-                throw new SymplParseException("Import as-names must be same form as member names.");
 
-            if (!lexer.GetToken().IsSyntaxToken(SyntaxTokenKind.CloseParenthesis))
-                throw new SymplParseException("Import must end with closing paren.", ScriptCodeParseResult.IncompleteToken);
+            if (members.Length != asNames.Length && asNames.Length != 0)
+                ReportDiagnostic(lexer, "Import as-names must be same form as member names.", SourceSpan.None, 100);
+
+            MatchToken(lexer, SyntaxTokenKind.CloseParenthesis);
 
             return new SymplImport(nsOrModule, members, asNames);
         }
@@ -222,27 +226,27 @@ namespace Sympl.Syntax
         /// </summary>
         static IdOrKeywordToken[] ParseImportNameOrModule(Lexer lexer)
         {
-            var token = lexer.GetToken();
-            if (!(token is IdOrKeywordToken idOrKeyword))
-                // Keywords are ok here.
-                throw new SymplParseException("Id must follow Import symbol");
+            var idOrKeyword = MatchToken<IdOrKeywordToken>(lexer);
 
+            Token token;
             var dot = lexer.GetToken();
             var nsOrModule = new List<IdOrKeywordToken>();
-            if (dot.IsSyntaxToken(SyntaxTokenKind.Dot))
+            if (dot is SyntaxToken { Kind: SyntaxTokenKind.Dot })
             {
                 nsOrModule.Add(idOrKeyword);
                 lexer.PutToken(dot);
                 var tmp = ParseDottedExpression(lexer, new SymplIdentifier(idOrKeyword));
                 foreach (var e in tmp.Expressions)
                 {
-                    if (!(e is SymplIdentifier id))
+                    // Keywords are ok here.
+                    if (e is SymplIdentifier id)
                     {
-                        // Keywords are ok here.
-                        throw new SymplParseException($"Import targets must be dotted identifiers.{e}{nsOrModule}");
+                        nsOrModule.Add(id.IdToken);
                     }
-
-                    nsOrModule.Add(id.IdToken);
+                    else
+                    {
+                        ReportDiagnostic(lexer, "Import targets must be dotted identifiers.", SourceSpan.None, 100);
+                    }
                 }
 
                 token = lexer.GetToken();
@@ -275,25 +279,29 @@ namespace Sympl.Syntax
                     lexer.PutToken(token);
                     var memberTokens = ParseList(lexer, $"Import {nameKinds}.").Elements;
 
-                    EnsureListOfIds(memberTokens, allowKeywords, $"Import {nameKinds} must be valid IDs.");
+                    EnsureListOfIds(lexer, memberTokens, allowKeywords, $"Import {nameKinds} must be valid IDs.");
                     break;
                 case SyntaxToken { Kind: SyntaxTokenKind.CloseParenthesis }:
                     lexer.PutToken(token);
                     break;
+                case var eof when eof == SyntaxToken.Eof:
+                    MatchToken(lexer, SyntaxTokenKind.CloseParenthesis);
+                    break;
                 default:
-                    throw new SymplParseException("Import takes dotted names, then member vars.");
+                    ReportDiagnostic(lexer, "Import takes dotted names, then member vars.", SourceSpan.None, 100);
+                    break;
             }
 
             return names.ToArray();
         }
 
-        static IdOrKeywordToken[] EnsureListOfIds(Object[] list, Boolean allowKeywords, String error)
+        static IdOrKeywordToken[] EnsureListOfIds(Lexer lexer, Object[] list, Boolean allowKeywords, String error)
         {
             foreach (var t in list)
 
                 // if t is not an id or keyword, or id is a keyword token when it's not allowed
                 if (!(t is IdOrKeywordToken id) || !allowKeywords && id is KeywordToken)
-                    throw new SymplParseException(error);
+                    ReportDiagnostic(lexer, error, SourceSpan.None, 100);
 
             return Array.FindAll(Array.ConvertAll(list, l => l as IdOrKeywordToken), f => f is { })!;
         }
@@ -313,7 +321,7 @@ namespace Sympl.Syntax
             var exprs = new List<SymplExpression>();
 
             var token = lexer.GetToken();
-            for (; token is IdOrKeywordToken || token.IsSyntaxToken(SyntaxTokenKind.OpenParenthesis); token = lexer.GetToken())
+            for (; token is IdOrKeywordToken || token is SyntaxToken { Kind: SyntaxTokenKind.OpenParenthesis }; token = lexer.GetToken())
             {
                 // Needs to be fun call or IDs
                 SymplExpression expression;
@@ -327,11 +335,12 @@ namespace Sympl.Syntax
                     lexer.PutToken(token);
                     expression = ParseParentheticForm(lexer);
                     if (expression is SymplCall funCall && !(funCall.Function is SymplIdentifier))
-                        throw new SymplParseException($"Dotted expressions must be identifiers or function calls with identifiers as the function value -- {expression}");
+                        ReportDiagnostic(lexer, "Dotted expressions must be identifiers or function calls with identifiers as the function value", SourceSpan.None, 100);
                 }
 
                 exprs.Add(expression);
-                if (!(token = lexer.GetToken()).IsSyntaxToken(SyntaxTokenKind.Dot))
+
+                if (!((token = lexer.GetToken()) is SyntaxToken { Kind: SyntaxTokenKind.Dot }))
                     break;
             }
 
@@ -340,7 +349,7 @@ namespace Sympl.Syntax
         }
 
         /// <summary>
-        /// Parses a LHS expression and value expression. All analysis on the LHS is in etgen.py.
+        /// Parses a LHS expression and value expression.
         /// </summary>
         static SymplAssignment ParseSet(Lexer lexer)
         {
@@ -348,8 +357,8 @@ namespace Sympl.Syntax
 
             var lhs = ParseExpression(lexer);
             var val = ParseExpression(lexer);
-            if (!lexer.GetToken().IsSyntaxToken(SyntaxTokenKind.CloseParenthesis))
-                throw new SymplParseException("Expected close paren for Set expression.", ScriptCodeParseResult.IncompleteToken);
+
+            MatchToken(lexer, SyntaxTokenKind.CloseParenthesis);
 
             return new SymplAssignment(lhs, val);
         }
@@ -365,20 +374,24 @@ namespace Sympl.Syntax
             // Get bindings
             var bindings = new List<SymplLetStar.LetBinding>();
 
+
             var token = lexer.GetToken();
-            for (; token.IsSyntaxToken(SyntaxTokenKind.OpenParenthesis); token = lexer.GetToken())
+            for (; token is SyntaxToken { Kind: SyntaxTokenKind.OpenParenthesis }; token = lexer.GetToken())
             {
                 var e = ParseExpression(lexer);
                 if (!(e is SymplIdentifier id) || id.IdToken is KeywordToken)
-                    throw new SymplParseException("Let binding must be (<ID> <expression>) -- ");
-
-                var init = ParseExpression(lexer);
-                bindings.Add(new SymplLetStar.LetBinding(id.IdToken, init));
+                {
+                    // TODO: Add source span to expression
+                    ReportDiagnostic(lexer, "Let binding must be (<id> <expression>)", SourceSpan.None, 100);
+                }
+                else
+                {
+                    var init = ParseExpression(lexer);
+                    bindings.Add(new SymplLetStar.LetBinding(id.IdToken, init));
+                }
 
                 MatchToken(lexer, SyntaxTokenKind.CloseParenthesis);
             }
-
-            MatchToken(lexer, SyntaxTokenKind.CloseParenthesis);
 
             return new SymplLetStar(bindings.ToArray(), ParseBody(lexer, "Unexpected EOF in Let."));
         }
@@ -406,10 +419,8 @@ namespace Sympl.Syntax
         {
             // First sub expression is callable object or invoke member expression.
             var fun = ParseExpression(lexer);
-            if (fun is SymplDot dottedExpr)
-                // Keywords ok as members.
-                if (!(dottedExpr.Expressions[^1] is SymplIdentifier))
-                    throw new SymplParseException($"Function call with dotted expression for function must end with ID expression, not member invoke.{dottedExpr.Expressions[^1]}");
+            if (fun is SymplDot dottedExpr && !(dottedExpr.Expressions[^1] is SymplIdentifier))
+                ReportDiagnostic(lexer, "Function call with dotted expression for function must end with ID expression, not member invoke.", SourceSpan.None, 100);
 
             // Tail exprs are args.
             return new SymplCall(fun, ParseBody(lexer, $"Unexpected EOF in arg list for {fun}"));
@@ -423,7 +434,7 @@ namespace Sympl.Syntax
             MatchToken(lexer, SyntaxTokenKind.Quote);
 
             var token = lexer.GetToken();
-            Object expression;
+            Object? expression = null;
 
             switch (token)
             {
@@ -436,7 +447,8 @@ namespace Sympl.Syntax
                     expression = token;
                     break;
                 default:
-                    throw new SymplParseException("Quoted expression can only be list, ID/Symbol, or literal.");
+                    ReportDiagnostic(lexer, "Quoted expression can only be list, ID/Symbol, or literal.", SourceSpan.None, 100);
+                    break;
             }
 
             return new SymplQuote(expression);
@@ -481,14 +493,21 @@ namespace Sympl.Syntax
 
         static SymplIf ParseIf(Lexer lexer)
         {
-            MatchToken(lexer, KeywordTokenKind.If);
+            var token = MatchToken(lexer, KeywordTokenKind.If);
 
             var args = ParseBody(lexer, "Unexpected EOF in If form.");
+
+            if (args.Length != 2 && args.Length != 3)
+            {
+                ReportDiagnostic(lexer, "IF must be (if <test> <consequent> [<alternative>]).", token.Location, 100);
+            }
+
             return args.Length switch
             {
+                0 => new SymplIf(null, null, null),
+                1 => new SymplIf(args[0], null, null),
                 2 => new SymplIf(args[0], args[1], null),
-                3 => new SymplIf(args[0], args[1], args[2]),
-                _ => throw new SymplParseException("IF must be (if <test> <consequent> [<alternative>]).")
+                _ => new SymplIf(args[0], args[1], args[2]),
             };
         }
 
@@ -511,9 +530,9 @@ namespace Sympl.Syntax
 
             var token = lexer.GetToken();
             SymplExpression? value;
-            if (token.IsSyntaxToken(SyntaxTokenKind.CloseParenthesis))
+            if (token is SyntaxToken { Kind: SyntaxTokenKind.CloseParenthesis })
             {
-                value = null;
+                    value = null;
             }
             else
             {
@@ -556,10 +575,10 @@ namespace Sympl.Syntax
 
             var token = lexer.GetToken();
             var res = new List<Object>();
-            while (token != SyntaxToken.Eof && !token.IsSyntaxToken(SyntaxTokenKind.CloseParenthesis))
+            while (token != SyntaxToken.Eof && !(token is SyntaxToken { Kind: SyntaxTokenKind.CloseParenthesis }))
             {
                 lexer.PutToken(token);
-                Object elt;
+                Object? elt = null;
 
                 switch (token)
                 {
@@ -572,15 +591,14 @@ namespace Sympl.Syntax
                         lexer.GetToken();
                         break;
                     case SyntaxToken { Kind: SyntaxTokenKind.Dot }:
-                        throw new SymplParseException($"Can't have dotted syntax in {errStr}");
+                        ReportDiagnostic(lexer, $"Can't have dotted tyntax in {errStr}", token.Location, 100);
+                        break;
                     default:
-                        throw new SymplParseException($"Unexpected token in list -- {token}");
+                        ReportDiagnostic(lexer, $"Unexpected token in list -- {token}", token, 100);
+                        break;
                 }
 
-                if (elt is null)
-                {
-                    throw new SymplParseException("Internal: no next element in list?");
-                }
+                if (elt is null) break;
 
                 res.Add(elt);
                 token = lexer.GetToken();
@@ -588,7 +606,7 @@ namespace Sympl.Syntax
 
             if (token == SyntaxToken.Eof)
             {
-                throw new SymplParseException("Unexpected EOF encountered while parsing list.", ScriptCodeParseResult.IncompleteToken);
+                ReportDiagnostic(lexer, "Unexpected EOF encountered while parsing list.", SourceSpan.None, 100, Severity.Error);
             }
 
             return new SymplList(res.ToArray());
@@ -596,7 +614,6 @@ namespace Sympl.Syntax
 
         static public SymplElt ParseElt(Lexer lexer)
         {
-            MatchToken(lexer, SyntaxTokenKind.OpenParenthesis);
             MatchToken(lexer, KeywordTokenKind.Elt);
 
             return new SymplElt(ParseExpression(lexer), ParseBody(lexer, "Unexpected EOF in arg list for call to Elt."));
@@ -607,8 +624,7 @@ namespace Sympl.Syntax
         /// </summary>
         static SymplBinary ParseBinaryExpression(Lexer lexer)
         {
-            if (!(lexer.GetToken() is KeywordToken keyword))
-                throw new SymplParseException("Internal error: parsing Binary?");
+            var keyword = MatchToken<KeywordToken>(lexer);
 
             ParseBinaryRuntimeCall(lexer, out var left, out var right);
             return new SymplBinary(left, right, GetExpressionType(keyword));
@@ -619,8 +635,7 @@ namespace Sympl.Syntax
         /// </summary>
         static SymplUnary ParseUnaryExpression(Lexer lexer)
         {
-            if (!(lexer.GetToken() is KeywordToken keyword))
-                throw new SymplParseException("Internal error: parsing Unary?");
+            var keyword = MatchToken<KeywordToken>(lexer);
 
             var op = GetExpressionType(keyword); 
             var operand = ParseExpression(lexer);
@@ -630,23 +645,84 @@ namespace Sympl.Syntax
             return new SymplUnary(operand, op);
         }
 
-        static Token MatchToken(Lexer lexer, SyntaxTokenKind kind)
-        {
-            var token = lexer.GetToken();
-            if (!token.IsSyntaxToken(kind))
-                throw new SymplParseException($"Expected token {kind}.", ScriptCodeParseResult.IncompleteToken);
+        static String AppendStackTrace(Lexer lexer, String diagnostic) => ((SymplCompilerOptions) lexer.Context.Options).ShowStackTrace
+                ? diagnostic + Environment.NewLine + Environment.StackTrace
+                : diagnostic;
 
-            return token;
+
+        static void ReportDiagnostic(Lexer lexer, String diagnostic, SourceSpan span, int errorCode, Severity severity = Severity.FatalError)
+        {
+            lexer.Context.Errors.Add(lexer.Context.SourceUnit, AppendStackTrace(lexer, diagnostic), span, errorCode, severity);
         }
 
-        static Token MatchToken(Lexer lexer, KeywordTokenKind kind)
+        static void ReportDiagnostic(Lexer lexer, String diagnostic, Token token, int errorCode, Severity severity = Severity.FatalError)
+        {
+            lexer.Context.Errors.Add(lexer.Context.SourceUnit, AppendStackTrace(lexer, diagnostic), token.Location, errorCode, severity);
+        }
+
+        static SyntaxToken MatchToken(Lexer lexer, SyntaxTokenKind kind)
         {
             var token = lexer.GetToken();
-            if (!token.IsKeywordToken(kind))
-                throw new SymplParseException($"Expected token {kind}.", ScriptCodeParseResult.IncompleteToken);
 
-            return token;
+            if (token is SyntaxToken t && t.Kind == kind)
+            {
+                return t;
+            }
+            else
+            {
+                lexer.PutToken(token);
+                ReportDiagnostic(lexer, $"Expected token {kind}, instead got token {token}.", token, 1000, token == SyntaxToken.Eof ? Severity.Error : Severity.FatalError);
+                return new SyntaxToken(kind, token.Location);
+            }
         }
+
+        static KeywordToken MatchToken(Lexer lexer, KeywordTokenKind kind)
+        {
+            var token = lexer.GetToken();
+
+            if (token is KeywordToken t && t.Kind == kind)
+            {
+                return t;
+            }
+            else
+            {
+                lexer.PutToken(token);
+                ReportDiagnostic(lexer, $"Expected token {kind}, instead got token {token}.", token, 1000, token == SyntaxToken.Eof ? Severity.Error : Severity.FatalError);
+                return new KeywordToken(kind, token.Location);
+            }
+        }
+
+        static TToken MatchToken<TToken>(Lexer lexer)
+            where TToken : Token
+        {
+            var token = lexer.GetToken();
+            if (token is TToken t)
+            {
+                return t;
+            }
+            else
+            {
+                lexer.PutToken(token);
+                var func = constructors.GetOrAdd(typeof(TToken), (type) =>
+                {
+                    var d = new DynamicMethod($"Create{type.Name}", type, new[] { typeof(SourceSpan) });
+                    var il = d.GetILGenerator();
+
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Newobj, typeof(TToken).GetConstructor(new[] { typeof(SourceSpan) })
+                        ?? throw new ArgumentException($"Type {type.Name} does not have SourceSpan accepting constructor."));
+                    il.Emit(OpCodes.Ret);
+
+                    return (Func<SourceSpan, TToken>) d.CreateDelegate(typeof(Func<SourceSpan, TToken>));
+                });
+
+                ReportDiagnostic(lexer, $"Expected token {typeof(TToken).Name}, instead got token {token}.", token, 100, token == SyntaxToken.Eof ? Severity.Error : Severity.FatalError);
+
+                return (TToken) func(token.Location);
+            }
+        }
+
+        static ConcurrentDictionary<Type, Func<SourceSpan, Object>> constructors = new ConcurrentDictionary<Type, Func<SourceSpan, object>>();
 
         /// <summary>
         /// Gets the <see cref="ExpressionType"/> for an operator.
@@ -664,7 +740,8 @@ namespace Sympl.Syntax
             KeywordTokenKind.And => ExpressionType.And,
             KeywordTokenKind.Or => ExpressionType.Or,
             KeywordTokenKind.Not => ExpressionType.Not,
-            _ => throw new SymplParseException("Unrecognized keyword for operators")
+            KeywordTokenKind.Invalid => throw Assert.Unreachable,
+            _ => throw new ArgumentException("Unrecognized keyword for operators", nameof(keyword))
         };
     }
 }

@@ -8,5 +8,9 @@ namespace Sympl.Syntax
         public NumberToken(Double val, SourceSpan location) : base(val, location)
         {
         }
+
+        public NumberToken(SourceSpan location) : base(location)
+        {
+        }
     }
 }

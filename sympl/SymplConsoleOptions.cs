@@ -2,15 +2,16 @@
 
 namespace Sympl
 {
-    sealed class SymplOptions : ConsoleOptions
+    sealed class SymplConsoleOptions : ConsoleOptions
     {
-        public SymplOptions()
+        public SymplConsoleOptions()
         {
             Introspection = false;
             AutoIndent = true;
             TabCompletion = true;
             ColorfulConsole = true;
             PrintVersion = true;
+            HandleExceptions = true;
         }
     }
 }

@@ -17,9 +17,14 @@ namespace Sympl.Syntax
     /// </remarks>
     public class IdOrKeywordToken : Token
     {
-        public IdOrKeywordToken(String id, SourceSpan location) : base(location)
+        public IdOrKeywordToken(String id, SourceSpan location) : base(location, false)
         {
             Name = id;
+        }
+
+        public IdOrKeywordToken(SourceSpan location) : base(location, true)
+        {
+            Name = "";
         }
 
         public String Name { get; }
