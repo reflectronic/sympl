@@ -3,7 +3,7 @@ using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
-    class NumberToken : LiteralToken
+    public class NumberToken : LiteralToken
     {
         public NumberToken(Double val, SourceSpan location) : base(val, location)
         {

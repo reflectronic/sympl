@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Expressions
 {
@@ -7,7 +8,7 @@ namespace Sympl.Expressions
         /// <summary>
         /// <paramref name="expression"/> must be <see cref="SymplList"/>, <see cref="SymplIdentifier"/>, or <see cref="SymplLiteral"/>
         /// </summary>
-        public SymplQuote(Object expression)
+        public SymplQuote(Object expression, SourceSpan location) : base(location)
         {
             Expression = expression;
         }

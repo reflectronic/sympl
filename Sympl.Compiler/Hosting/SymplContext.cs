@@ -69,6 +69,8 @@ namespace Sympl.Hosting
             // TODO: Find a way to avoid generating the expression when we aren't interested in it
             // (e.g. REPL newline handling/tab completion)
 
+            var symplOptions = (SymplCompilerOptions) options;
+
             try
             {
                 switch (sourceUnit.Kind)
@@ -81,9 +83,10 @@ namespace Sympl.Hosting
 
                             if (counter.AnyError)
                             {
-                                sourceUnit.CodeProperties = counter.FatalErrorCount is 0
-                                    ? ScriptCodeParseResult.IncompleteToken
-                                    : ScriptCodeParseResult.Invalid;
+                                if (symplOptions.SetIncompleteTokenParseResult)
+                                    sourceUnit.CodeProperties = counter.FatalErrorCount is 0
+                                        ? ScriptCodeParseResult.IncompleteToken
+                                        : ScriptCodeParseResult.Invalid;
 
                                 return null;
                             }
@@ -128,7 +131,9 @@ namespace Sympl.Hosting
                         throw Assert.Unreachable;
                 }
             }
+#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception e)
+#pragma warning restore CA1031 // Do not catch general exception types
             {
                 errorSink.Add(sourceUnit, $"Internal error: " + e.ToString(), SourceSpan.None, 9999, Severity.FatalError);
                 return null;
@@ -146,7 +151,11 @@ namespace Sympl.Hosting
 
         public override CompilerOptions GetCompilerOptions()
         {
-            return new SymplCompilerOptions(Options.ExceptionDetail);
+            return new SymplCompilerOptions
+            {
+                ShowStackTrace = Options.ExceptionDetail || Options.ShowClrExceptions,
+                SetIncompleteTokenParseResult = false
+            };
         }
 
         /// <summary>

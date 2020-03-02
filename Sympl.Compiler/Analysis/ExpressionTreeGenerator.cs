@@ -21,7 +21,7 @@ namespace Sympl.Analysis
             SymplIdentifier identifier => AnalyzeIdentifier(identifier, scope),
             SymplQuote quote => AnalyzeQuote(quote, scope),
             SymplLiteral literal => Expression.Constant(literal.Value),
-            SymplAssignment assignment => AnalyzeAssignment(assignment, scope),
+            SymplSet assignment => AnalyzeAssignment(assignment, scope),
             SymplLetStar star => AnalyzeLetStar(star, scope),
             SymplBlock block => AnalyzeBlock(block, scope),
             SymplEq eq => AnalyzeEq(eq, scope),
@@ -45,8 +45,8 @@ namespace Sympl.Analysis
                 throw new InvalidOperationException("Import expression must be a top level expression.");
             }
 
-            return Expression.Call(typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.Import)), scope.Runtime, 
-                scope.Module, Expression.Constant(Array.ConvertAll(expression.NamespaceExpr, id => id.Name)),
+            return Expression.Call(typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.Import)), scope.Runtime,
+                scope.Module, Expression.Constant(Array.ConvertAll(expression.Namespaces, id => id.Name)),
                 Expression.Constant(Array.ConvertAll(expression.MemberNames, id => id.Name)),
                 Expression.Constant(Array.ConvertAll(expression.Renames, id => id.Name)));
         }
@@ -60,11 +60,11 @@ namespace Sympl.Analysis
 
             return Expression.Dynamic(scope.GetContext().GetSetMemberBinder(expression.Name), typeof(Object),
                 scope.Module,
-                AnalyzeLambdaDef(expression.Params, expression.Body, scope, $"defun {expression.Name}"));
+                AnalyzeLambdaDef(expression.Parameters, expression.Body, scope, $"defun {expression.Name}"));
         }
 
         public static LambdaExpression AnalyzeLambdaExpr(SymplLambda expression, AnalysisScope scope) =>
-            AnalyzeLambdaDef(expression.Params, expression.Body, scope, "lambda");
+            AnalyzeLambdaDef(expression.Parameters, expression.Body, scope, "lambda");
 
         static LambdaExpression AnalyzeLambdaDef(IdOrKeywordToken[] parameters, SymplExpression[] body, AnalysisScope scope, String description)
         {
@@ -131,8 +131,8 @@ namespace Sympl.Analysis
                             scope,
                             dottedExpr.Expressions.Length > 1
                                 // create a new dot expression for the object that doesn't include the last part
-                                ? AnalyzeDot(new SymplDot(dottedExpr.ObjectExpr, RuntimeHelpers.RemoveLast(dottedExpr.Expressions)), scope)
-                                : AnalyzeExpression(dottedExpr.ObjectExpr, scope)))
+                                ? AnalyzeDot(new SymplDot(dottedExpr.Target, RuntimeHelpers.RemoveLast(dottedExpr.Expressions), SourceSpan.None), scope)
+                                : AnalyzeExpression(dottedExpr.Target, scope)))
                 // Use DynamicExpression so that I don't always have to have a delegate to call, such as what
                 // happens with IronPython interop.
                 : Expression.Dynamic(
@@ -148,7 +148,7 @@ namespace Sympl.Analysis
         /// </summary>
         public static Expression AnalyzeDot(SymplDot expression, AnalysisScope scope)
         {
-            var curExpr = AnalyzeExpression(expression.ObjectExpr, scope);
+            var curExpr = AnalyzeExpression(expression.Target, scope);
             foreach (var e in expression.Expressions)
             {
                 curExpr = e switch
@@ -173,12 +173,12 @@ namespace Sympl.Analysis
         /// Handles IDs, indexing, and member sets. IDs are either lexical or dynamic expressions on the
         /// module scope. Everything else is dynamic.
         /// </summary>
-        public static Expression AnalyzeAssignment(SymplAssignment expression, AnalysisScope scope)
+        public static Expression AnalyzeAssignment(SymplSet expression, AnalysisScope scope)
         {
-            switch (expression.Location)
+            switch (expression.Source)
             {
                 case SymplIdentifier idExpr:
-                    var lhs = AnalyzeExpression(expression.Location, scope);
+                    var lhs = AnalyzeExpression(expression.Source, scope);
                     var val = AnalyzeExpression(expression.Value, scope);
                     var param = FindIdDef(idExpr.IdToken.Name, scope);
                     if (param is { })
@@ -222,7 +222,7 @@ namespace Sympl.Analysis
                     return Expression.Dynamic(
                         scope.GetContext().GetSetMemberBinder(((SymplIdentifier) dottedExpr.Expressions[0]).IdToken.Name),
                         typeof(Object),
-                        AnalyzeExpression(dottedExpr.ObjectExpr, scope),
+                        AnalyzeExpression(dottedExpr.Target, scope),
                         AnalyzeExpression(expression.Value, scope));
                 default:
                     throw new InvalidOperationException("Invalid left hand side type.");
@@ -322,7 +322,7 @@ namespace Sympl.Analysis
 
         static Object? MakeQuoteConstant(Object expression, SymplContext context) => expression switch
         {
-            SymplList list => Cons._List(Array.ConvertAll(list.Elements, e => MakeQuoteConstant(e, context))),
+            SymplList list => Cons.List(Array.ConvertAll(list.Elements, e => MakeQuoteConstant(e, context))),
             IdOrKeywordToken token => context.MakeSymbol(token.Name),
             LiteralToken token => token.Value,
             _ => throw new InvalidOperationException($"Internal: quoted list has -- {expression}"),
@@ -411,7 +411,7 @@ namespace Sympl.Analysis
                 // The language has the following special logic to handle And and Or x And y == if x then
                 // y x Or y == if x then x else (if y then y)
                 case ExpressionType.And:
-                    return AnalyzeIf(new SymplIf(expression.Left, expression.Right, null), scope);
+                    return AnalyzeIf(new SymplIf(expression.Left, expression.Right, null, SourceSpan.None), scope);
                 case ExpressionType.Or:
                     // Use (LetStar (tmp expression) (if tmp tmp)) to represent (if expression expression) to remove
                     // duplicate evaluation. So x Or y is translated into (Let* (tmp1 x) (If tmp1 tmp1
@@ -424,16 +424,16 @@ namespace Sympl.Analysis
                         "__tmpLetVariable2", SourceSpan.None);
                     var tmpExpr2 = new SymplIdentifier(tmp2);
                     var binding2 = new SymplLetStar.LetBinding(tmp2, expression.Right);
-                    SymplExpression ifExpr2 = new SymplIf(tmpExpr2, tmpExpr2, null);
-                    var letExpr2 = new SymplLetStar(new[] { binding2 }, new[] { ifExpr2 });
+                    SymplExpression ifExpr2 = new SymplIf(tmpExpr2, tmpExpr2, null, SourceSpan.None);
+                    var letExpr2 = new SymplLetStar(new[] { binding2 }, new[] { ifExpr2 }, SourceSpan.None);
 
                     var tmp1 = new IdOrKeywordToken(
                         // Real implementation needs to ensure unique ID in scope chain.
                         "__tmpLetVariable1", SourceSpan.None);
                     var tmpExpr1 = new SymplIdentifier(tmp1);
                     var binding1 = new SymplLetStar.LetBinding(tmp1, expression.Left);
-                    SymplExpression ifExpr1 = new SymplIf(tmpExpr1, tmpExpr1, letExpr2);
-                    return AnalyzeLetStar(new SymplLetStar(new[] { binding1 }, new[] { ifExpr1 }), scope);
+                    SymplExpression ifExpr1 = new SymplIf(tmpExpr1, tmpExpr1, letExpr2, SourceSpan.None);
+                    return AnalyzeLetStar(new SymplLetStar(new[] { binding1 }, new[] { ifExpr1 }, SourceSpan.None), scope);
                 default:
                     return Expression.Dynamic(
                         scope.GetContext().GetBinaryOperationBinder(expression.Operation),
@@ -461,7 +461,7 @@ namespace Sympl.Analysis
         /// </summary>
         /// <devdoc>
         /// This also works for .NET objects with indexer Item properties. We handle analyzing Elt for
-        /// assignment in <see cref="AnalyzeAssignment(SymplAssignment, AnalysisScope)"/>.
+        /// assignment in <see cref="AnalyzeAssignment(SymplSet, AnalysisScope)"/>.
         /// </devdoc>
         public static Expression AnalyzeElt(SymplElt expression, AnalysisScope scope) => Expression.Dynamic(
                 scope.GetContext().GetGetIndexBinder(new CallInfo(expression.Indexes.Length)),

@@ -4,11 +4,11 @@ using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
-    class KeywordToken : IdOrKeywordToken
+    public class KeywordToken : IdOrKeywordToken
     {
         public KeywordTokenKind Kind { get; }
 
-        public KeywordToken(KeywordTokenKind kind, SourceSpan location) : base(KeywordToString[kind], location)
+        public KeywordToken(KeywordTokenKind kind, SourceSpan location) : base(KeywordNames[kind], location)
         {
             Kind = kind;
         }
@@ -17,7 +17,7 @@ namespace Sympl.Syntax
         {
         }
 
-        static readonly Dictionary<String, KeywordTokenKind> StringToKeyword = new Dictionary<String, KeywordTokenKind>(StringComparer.OrdinalIgnoreCase)
+        public static readonly Dictionary<String, KeywordTokenKind> KeywordTypes = new Dictionary<String, KeywordTokenKind>(StringComparer.OrdinalIgnoreCase)
         {
             { "import", KeywordTokenKind.Import },
             { "defun", KeywordTokenKind.Defun },
@@ -52,7 +52,8 @@ namespace Sympl.Syntax
             { "or", KeywordTokenKind.Or },
             { "not", KeywordTokenKind.Not }
         };
-        static readonly Dictionary<KeywordTokenKind, String> KeywordToString = new Dictionary<KeywordTokenKind, String>()
+
+        public static readonly Dictionary<KeywordTokenKind, String> KeywordNames = new Dictionary<KeywordTokenKind, String>()
         {
             { KeywordTokenKind.Import, "import" },
             { KeywordTokenKind.Defun, "defun" },
@@ -90,7 +91,7 @@ namespace Sympl.Syntax
 
         internal static KeywordToken MakeKeywordToken(String name, SourceSpan location)
         {
-            if (StringToKeyword.TryGetValue(name, out var kind))
+            if (KeywordTypes.TryGetValue(name, out var kind))
             {
                 return new KeywordToken(kind, location);
             }
@@ -99,7 +100,5 @@ namespace Sympl.Syntax
                 throw new ArgumentException("Given keyword name is not a keyword.", nameof(name));
             }
         }
-
-        internal static Boolean IsKeywordName(String id) => StringToKeyword.ContainsKey(id);
     }
 }

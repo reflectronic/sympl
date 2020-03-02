@@ -12,6 +12,8 @@ namespace Sympl
 
         protected override String Logo => $"Type \"exit\" to exit.{Environment.NewLine}";
 
+        protected override void ExecuteCommand(String command) => ExecuteCommand(Engine.CreateScriptSourceFromString(command.Trim(), SourceCodeKind.InteractiveCode));
+
         // TODO: Autoindent
     }
 }

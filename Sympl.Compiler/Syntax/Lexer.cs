@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq.Expressions;
 using Microsoft.Scripting;
 using Microsoft.Scripting.Runtime;
 
@@ -7,7 +9,7 @@ namespace Sympl.Syntax
 {
     public class Lexer
     {
-        Token? putToken;
+        readonly Queue<Token> putTokens = new Queue<Token>(2);
         readonly TokenizerBuffer reader;
         readonly SourceCodeReader sourceCode;
 
@@ -27,12 +29,7 @@ namespace Sympl.Syntax
 
         public void PutToken(Token token)
         {
-            if (putToken is { })
-            {
-                throw new InvalidOperationException("Internal Error: putting token when there is one?");
-            }
-            
-            putToken = token;
+            putTokens.Enqueue(token);
         }
         /// <summary>
         /// Returns any saved token, else skips whitespace and returns next token from input stream.
@@ -43,21 +40,20 @@ namespace Sympl.Syntax
         /// </remarks>
         public Token GetToken()
         {
-            if (putToken is { })
+            if (putTokens.TryDequeue(out var putToken))
             {
-                var tmp = putToken;
-                putToken = null;
-                return tmp;
+                return putToken;
             }
 
             SkipWhitespace();
             var ch = (Char) reader.Peek();
-            reader.DiscardToken();
+
+            if (ch != EOF) { reader.DiscardToken(); }
 
             switch (ch)
             {
                 case EOF:
-                    return SyntaxToken.Eof;
+                    return new SyntaxToken(SyntaxTokenKind.Eof, reader.TokenSpan);
                 case '(':
                     reader.Read();
                     reader.MarkSingleLineTokenEnd();
@@ -142,7 +138,7 @@ namespace Sympl.Syntax
         {
             reader.MarkSingleLineTokenEnd();
             var name = reader.GetTokenString();
-            if (!isQuoted && KeywordToken.IsKeywordName(name))
+            if (!isQuoted && KeywordToken.KeywordTypes.ContainsKey(name))
             {
                 return KeywordToken.MakeKeywordToken(name, reader.TokenSpan);
             }

@@ -1,19 +1,20 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Expressions
 {
     public class SymplDot : SymplExpression
     {
-        public SymplExpression ObjectExpr { get; }
+        public SymplExpression Target { get; }
 
         public SymplExpression[] Expressions { get; }
 
-        public SymplDot(SymplExpression expr, SymplExpression[] exprs)
+        public SymplDot(SymplExpression expr, SymplExpression[] exprs, SourceSpan location) : base(location)
         {
-            ObjectExpr = expr;
+            Target = expr;
             Expressions = exprs;
         }
 
-        public override String ToString() => $"<DotExpr {ObjectExpr}.{Expressions}>";
+        public override String ToString() => $"<DotExpr {Target}.{Expressions}>";
     }
 }

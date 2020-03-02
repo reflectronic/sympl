@@ -1,6 +1,14 @@
+using Microsoft.Scripting;
+
 namespace Sympl.Expressions
 {
-    public class SymplExpression
+    public abstract class SymplExpression
     {
+        protected SymplExpression(SourceSpan location)
+        {
+            Location = location;
+        }
+
+        public SourceSpan Location { get; }
     }
 }

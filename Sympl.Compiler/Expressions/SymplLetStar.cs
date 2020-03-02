@@ -1,11 +1,13 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Scripting;
 using Sympl.Syntax;
 
 namespace Sympl.Expressions
 {
     public class SymplLetStar : SymplExpression
     {
-        public SymplLetStar(LetBinding[] bindings, SymplExpression[] body)
+        public SymplLetStar(LetBinding[] bindings, SymplExpression[] body, SourceSpan location) : base(location)
         {
             Bindings = bindings;
             Body = body;
@@ -17,9 +19,11 @@ namespace Sympl.Expressions
 
         public override String ToString() => $"<Let* ({Bindings}){Body}>";
 
+
         /// <summary>
         /// Represents a binding defined in a <see cref="SymplLetStar" />.
         /// </summary>
+        [SuppressMessage("Design", "CA1034:Nested types should not be visible", Justification = "It's fine")]
         public class LetBinding
         {
             public LetBinding(IdOrKeywordToken variable, SymplExpression value)

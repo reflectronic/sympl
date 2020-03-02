@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Microsoft.Scripting;
 
 namespace Sympl.Expressions
 {
@@ -10,7 +11,7 @@ namespace Sympl.Expressions
 
         public ExpressionType Operation { get; }
 
-        public SymplBinary(SymplExpression left, SymplExpression right, ExpressionType operation)
+        public SymplBinary(SymplExpression left, SymplExpression right, ExpressionType operation, SourceSpan location) : base(location)
         {     
             Left = left;
             Right = right;

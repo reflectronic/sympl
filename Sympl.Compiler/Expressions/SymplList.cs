@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Expressions
 {
@@ -9,7 +10,7 @@ namespace Sympl.Expressions
         /// </devdoc>
         public Object[] Elements { get; }
 
-        public SymplList(Object[] elements)
+        public SymplList(Object[] elements, SourceSpan location) : base(location)
         {
             Elements = elements;
         }

@@ -3,10 +3,8 @@ using Microsoft.Scripting;
 
 namespace Sympl.Syntax
 {
-    class LiteralToken : Token
+    public class LiteralToken : Token
     {
-        static readonly Object Sentinel = new Object();
-
         public Object Value { get; }
 
         public LiteralToken(Object val, SourceSpan location) : base(location, false)
@@ -16,7 +14,8 @@ namespace Sympl.Syntax
 
         public LiteralToken(SourceSpan location) : base(location, true)
         {
-            Value = Sentinel;
+            // The expression tree generator would not be invoked in a scenario where this is null.
+            Value = null!;
         }
     }
 }

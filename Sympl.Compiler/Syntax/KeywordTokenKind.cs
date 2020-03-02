@@ -1,6 +1,6 @@
 ﻿namespace Sympl.Syntax
 {
-    enum KeywordTokenKind
+    public enum KeywordTokenKind
     {
         Invalid,
         Import,

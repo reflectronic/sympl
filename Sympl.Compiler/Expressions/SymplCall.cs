@@ -1,10 +1,11 @@
 using System;
+using Microsoft.Scripting;
 
 namespace Sympl.Expressions
 {
     public class SymplCall : SymplExpression
     {
-        public SymplCall(SymplExpression fun, SymplExpression[] args)
+        public SymplCall(SymplExpression fun, SymplExpression[] args, SourceSpan location) : base(location)
         {
             Function = fun;
             Arguments = args;

@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Microsoft.Scripting;
 
 namespace Sympl.Expressions
 {
@@ -8,7 +9,7 @@ namespace Sympl.Expressions
 
         public ExpressionType Operation { get; }
 
-        public SymplUnary(SymplExpression expression, ExpressionType operation)
+        public SymplUnary(SymplExpression expression, ExpressionType operation, SourceSpan location) : base(location)
         {
             Operand = expression;
             Operation = operation;

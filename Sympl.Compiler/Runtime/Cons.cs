@@ -47,7 +47,7 @@ namespace Sympl.Runtime
         /// <summary>
         /// Runtime helper method.
         /// </summary>
-        public static Cons? _List(params Object?[] elements)
+        public static Cons? List(params Object?[] elements)
         {
             if (elements.Length == 0) 
                 return null;

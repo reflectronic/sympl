@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
-using Sympl.Binders;
 
 namespace Sympl.Runtime
 {

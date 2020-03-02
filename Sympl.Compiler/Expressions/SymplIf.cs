@@ -1,8 +1,10 @@
+using Microsoft.Scripting;
+
 namespace Sympl.Expressions
 {
     public class SymplIf : SymplExpression
     {
-        public SymplIf(SymplExpression test, SymplExpression consequent, SymplExpression? alternative)
+        public SymplIf(SymplExpression test, SymplExpression consequent, SymplExpression? alternative, SourceSpan location) : base(location)
         {
             Test = test;
             Consequent = consequent;

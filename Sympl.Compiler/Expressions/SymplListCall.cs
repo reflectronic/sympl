@@ -1,3 +1,5 @@
+using Microsoft.Scripting;
+
 namespace Sympl.Expressions
 {
     public class SymplListCall : SymplExpression
@@ -7,7 +9,7 @@ namespace Sympl.Expressions
         /// </devdoc>
         public SymplExpression[] Elements { get; }
 
-        public SymplListCall(SymplExpression[] elements)
+        public SymplListCall(SymplExpression[] elements, SourceSpan location) : base(location)
         {
             Elements = elements;
         }

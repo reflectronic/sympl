@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Scripting;
 using Sympl.Syntax;
 
 namespace Sympl.Expressions
@@ -14,7 +15,7 @@ namespace Sympl.Expressions
     {
         public IdOrKeywordToken IdToken { get; }
 
-        public SymplIdentifier(IdOrKeywordToken id)
+        public SymplIdentifier(IdOrKeywordToken id) : base(id.Location)
         {   
             IdToken = id;
         }
