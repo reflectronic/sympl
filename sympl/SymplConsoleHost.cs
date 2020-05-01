@@ -15,6 +15,7 @@ namespace Sympl
             };
 
             Runtime.LoadAssembly(typeof(Console).Assembly);
+
             Runtime.Globals.SetVariable("exit", new Action(() => Environment.Exit(0)));
             base.ExecuteInternal();
         }

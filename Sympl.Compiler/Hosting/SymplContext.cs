@@ -98,7 +98,7 @@ namespace Sympl.Hosting
                             var lambda = Expression.Lambda<Func<CodeContext, IDynamicMetaObjectProvider, Object>>(
                                 Expression.Convert(ExpressionTreeGenerator.AnalyzeExpression(ast, scope), typeof(Object)),
                                 scope.Runtime,
-                                scope.Module);
+                                scope.ThisModule);
 
                             return new SymplCode(this, lambda, sourceUnit);
                         }
@@ -123,7 +123,7 @@ namespace Sympl.Hosting
                             body[^1] = Expression.Constant(null);
 
                             var lambda = Expression.Lambda<Func<CodeContext, IDynamicMetaObjectProvider, Object>>(Expression.Block(body),
-                                    scope.Runtime, scope.Module);
+                                    scope.Runtime, scope.ThisModule);
 
                             return new SymplCode(this, lambda, sourceUnit);
                         }
@@ -154,7 +154,7 @@ namespace Sympl.Hosting
             return new SymplCompilerOptions
             {
                 ShowStackTrace = Options.ExceptionDetail || Options.ShowClrExceptions,
-                SetIncompleteTokenParseResult = false
+                SetIncompleteTokenParseResult = true
             };
         }
 
@@ -247,30 +247,30 @@ namespace Sympl.Hosting
         // TODO: Use DefaultBinder
 
         readonly ConcurrentDictionary<String, SymplGetMemberBinder> getMemberBinders = new ConcurrentDictionary<String, SymplGetMemberBinder>(StringComparer.OrdinalIgnoreCase);
-        public SymplGetMemberBinder GetGetMemberBinder(String name) => getMemberBinders.GetOrAdd(name, name => new SymplGetMemberBinder(name));
+        public SymplGetMemberBinder GetMember(String name) => getMemberBinders.GetOrAdd(name, name => new SymplGetMemberBinder(name));
 
         readonly ConcurrentDictionary<String, SymplSetMemberBinder> setMemberBinders = new ConcurrentDictionary<String, SymplSetMemberBinder>(StringComparer.OrdinalIgnoreCase);
-        public SymplSetMemberBinder GetSetMemberBinder(String name) => setMemberBinders.GetOrAdd(name, name => new SymplSetMemberBinder(name));
+        public SymplSetMemberBinder SetMember(String name) => setMemberBinders.GetOrAdd(name, name => new SymplSetMemberBinder(name));
 
         readonly ConcurrentDictionary<CallInfo, SymplInvokeBinder> invokeBinders = new ConcurrentDictionary<CallInfo, SymplInvokeBinder>();
-        public SymplInvokeBinder GetInvokeBinder(CallInfo info) => invokeBinders.GetOrAdd(info, info => new SymplInvokeBinder(info));
+        public SymplInvokeBinder Invoke(CallInfo info) => invokeBinders.GetOrAdd(info, info => new SymplInvokeBinder(info));
 
         readonly ConcurrentDictionary<InvokeMemberBinderKey, SymplInvokeMemberBinder> invokeMemberBinders = new ConcurrentDictionary<InvokeMemberBinderKey, SymplInvokeMemberBinder>();
-        public SymplInvokeMemberBinder GetInvokeMemberBinder(InvokeMemberBinderKey info) => invokeMemberBinders.GetOrAdd(info, info => new SymplInvokeMemberBinder(info.Name, info.Info));
+        public SymplInvokeMemberBinder InvokeMember(InvokeMemberBinderKey info) => invokeMemberBinders.GetOrAdd(info, info => new SymplInvokeMemberBinder(info.Name, info.Info));
 
         readonly ConcurrentDictionary<CallInfo, SymplCreateInstanceBinder> createInstanceBinders = new ConcurrentDictionary<CallInfo, SymplCreateInstanceBinder>();
-        public SymplCreateInstanceBinder GetCreateInstanceBinder(CallInfo info) => createInstanceBinders.GetOrAdd(info, info => new SymplCreateInstanceBinder(info));
+        public SymplCreateInstanceBinder CreateInstance(CallInfo info) => createInstanceBinders.GetOrAdd(info, info => new SymplCreateInstanceBinder(info));
 
         readonly ConcurrentDictionary<CallInfo, SymplGetIndexBinder> getIndexBinders = new ConcurrentDictionary<CallInfo, SymplGetIndexBinder>();
-        public SymplGetIndexBinder GetGetIndexBinder(CallInfo info) => getIndexBinders.GetOrAdd(info, info => new SymplGetIndexBinder(info));
+        public SymplGetIndexBinder GetIndex(CallInfo info) => getIndexBinders.GetOrAdd(info, info => new SymplGetIndexBinder(info));
 
         readonly ConcurrentDictionary<CallInfo, SymplSetIndexBinder> setIndexBinders = new ConcurrentDictionary<CallInfo, SymplSetIndexBinder>();
-        public SymplSetIndexBinder GetSetIndexBinder(CallInfo info) => setIndexBinders.GetOrAdd(info, info => new SymplSetIndexBinder(info));
+        public SymplSetIndexBinder SetIndex(CallInfo info) => setIndexBinders.GetOrAdd(info, info => new SymplSetIndexBinder(info));
 
         readonly ConcurrentDictionary<ExpressionType, SymplBinaryOperationBinder> binaryOperationBinders = new ConcurrentDictionary<ExpressionType, SymplBinaryOperationBinder>();
-        public SymplBinaryOperationBinder GetBinaryOperationBinder(ExpressionType op) => binaryOperationBinders.GetOrAdd(op, op => new SymplBinaryOperationBinder(op));
+        public SymplBinaryOperationBinder Binary(ExpressionType op) => binaryOperationBinders.GetOrAdd(op, op => new SymplBinaryOperationBinder(op));
 
         readonly ConcurrentDictionary<ExpressionType, SymplUnaryOperationBinder> unaryOperationBinders = new ConcurrentDictionary<ExpressionType, SymplUnaryOperationBinder>();
-        public SymplUnaryOperationBinder GetUnaryOperationBinder(ExpressionType op) => unaryOperationBinders.GetOrAdd(op, op => new SymplUnaryOperationBinder(op));
+        public SymplUnaryOperationBinder Unary(ExpressionType op) => unaryOperationBinders.GetOrAdd(op, op => new SymplUnaryOperationBinder(op));
     }
 }

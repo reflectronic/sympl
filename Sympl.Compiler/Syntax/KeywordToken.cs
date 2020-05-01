@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Scripting;
 
 namespace Sympl.Syntax
@@ -53,41 +54,7 @@ namespace Sympl.Syntax
             { "not", KeywordTokenKind.Not }
         };
 
-        public static readonly Dictionary<KeywordTokenKind, String> KeywordNames = new Dictionary<KeywordTokenKind, String>()
-        {
-            { KeywordTokenKind.Import, "import" },
-            { KeywordTokenKind.Defun, "defun" },
-            { KeywordTokenKind.Lambda, "lambda" },
-            { KeywordTokenKind.Defclass, "defclass" },
-            { KeywordTokenKind.Defmethod, "defmethod" },
-            { KeywordTokenKind.New, "new" },
-            { KeywordTokenKind.Set, "set" },
-            { KeywordTokenKind.LetStar, "let*" },
-            { KeywordTokenKind.Block, "block" },
-            { KeywordTokenKind.Loop, "loop" },
-            { KeywordTokenKind.Break, "break" },
-            { KeywordTokenKind.Continue, "continue" },
-            { KeywordTokenKind.Return, "return" },
-            { KeywordTokenKind.Cons, "cons" },
-            { KeywordTokenKind.Eq, "eq" },
-            { KeywordTokenKind.List, "list" },
-            { KeywordTokenKind.Elt, "elt" },
-            { KeywordTokenKind.Nil, "nil" },
-            { KeywordTokenKind.True, "true" },
-            { KeywordTokenKind.If, "if" },
-            { KeywordTokenKind.False, "false" },
-            { KeywordTokenKind.Add, "+" },
-            { KeywordTokenKind.Subtract, "-" },
-            { KeywordTokenKind.Multiply, "*" },
-            { KeywordTokenKind.Divide, "/" },
-            { KeywordTokenKind.Equal, "=" },
-            { KeywordTokenKind.NotEqual, "!=" },
-            { KeywordTokenKind.GreaterThan, ">" },
-            { KeywordTokenKind.LessThan, "<" },
-            { KeywordTokenKind.And, "and" },
-            { KeywordTokenKind.Or, "or" },
-            { KeywordTokenKind.Not, "not" }
-        };
+        public static readonly Dictionary<KeywordTokenKind, String> KeywordNames = KeywordTypes.ToDictionary(p => p.Value, p => p.Key);
 
         internal static KeywordToken MakeKeywordToken(String name, SourceSpan location)
         {

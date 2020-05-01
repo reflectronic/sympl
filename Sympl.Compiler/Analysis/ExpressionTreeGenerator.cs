@@ -17,7 +17,7 @@ namespace Sympl.Analysis
             SymplImport import => AnalyzeImport(import, scope),
             SymplCall call => AnalyzeCall(call, scope),
             SymplDefun defun => AnalyzeDefun(defun, scope),
-            SymplLambda lambda => AnalyzeLambdaExpr(lambda, scope),
+            SymplLambda lambda => AnalyzeLambda(lambda, scope),
             SymplIdentifier identifier => AnalyzeIdentifier(identifier, scope),
             SymplQuote quote => AnalyzeQuote(quote, scope),
             SymplLiteral literal => Expression.Constant(literal.Value),
@@ -45,8 +45,11 @@ namespace Sympl.Analysis
                 throw new InvalidOperationException("Import expression must be a top level expression.");
             }
 
-            return Expression.Call(typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.Import)), scope.Runtime,
-                scope.Module, Expression.Constant(Array.ConvertAll(expression.Namespaces, id => id.Name)),
+            return Expression.Call(
+                typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.Import)),
+                scope.Runtime,
+                scope.ThisModule,
+                Expression.Constant(Array.ConvertAll(expression.Namespaces, id => id.Name)),
                 Expression.Constant(Array.ConvertAll(expression.MemberNames, id => id.Name)),
                 Expression.Constant(Array.ConvertAll(expression.Renames, id => id.Name)));
         }
@@ -54,23 +57,23 @@ namespace Sympl.Analysis
         public static DynamicExpression AnalyzeDefun(SymplDefun expression, AnalysisScope scope)
         {
             if (!scope.IsModule)
-            {
                 throw new InvalidOperationException("Use Defmethod or Lambda when not defining top-level function.");
-            }
 
-            return Expression.Dynamic(scope.GetContext().GetSetMemberBinder(expression.Name), typeof(Object),
-                scope.Module,
-                AnalyzeLambdaDef(expression.Parameters, expression.Body, scope, $"defun {expression.Name}"));
+            return Expression.Dynamic(
+                scope.Context.SetMember(expression.Name),
+                typeof(Object),
+                scope.ThisModule,
+                AnalyzeFunctionDefinition(expression.Parameters, expression.Body, scope, $"defun {expression.Name}"));
         }
 
-        public static LambdaExpression AnalyzeLambdaExpr(SymplLambda expression, AnalysisScope scope) =>
-            AnalyzeLambdaDef(expression.Parameters, expression.Body, scope, "lambda");
+        public static LambdaExpression AnalyzeLambda(SymplLambda expression, AnalysisScope scope) =>
+            AnalyzeFunctionDefinition(expression.Parameters, expression.Body, scope, "lambda");
 
-        static LambdaExpression AnalyzeLambdaDef(IdOrKeywordToken[] parameters, SymplExpression[] body, AnalysisScope scope, String description)
+        static LambdaExpression AnalyzeFunctionDefinition(IdOrKeywordToken[] parameters, SymplExpression[] body, AnalysisScope scope, String description)
         {
             var funScope = new AnalysisScope(scope, description)
             {
-                IsLambda = true // needed for return support.
+                IsLambda = true // Needed for return support
             };
 
             var paramsInOrder = new List<ParameterExpression>();
@@ -91,23 +94,30 @@ namespace Sympl.Analysis
             // last Type, which is object for Sympl defs.
             var arr = new Type[parameters.Length + 1];
             arr.AsSpan().Fill(typeof(Object));
-            return Expression.Lambda(Expression.GetFuncType(arr), Expression.Block(bodyExpressions), paramsInOrder);
+            return Expression.Lambda(
+                Expression.GetFuncType(arr),
+                Expression.Block(bodyExpressions),
+                paramsInOrder);
         }
 
+        /// <summary>
+        /// Analyzes an array of expressions, and additionally an optional first and last expression.
+        /// </summary>
         static Expression[] Analyze(SymplExpression[] expressions, AnalysisScope scope, Expression? firstArg = null, Expression? lastArg = null)
         {
             var firstArgOffset = firstArg is { } ? 1 : 0;
-            var secondArgOffset = lastArg is { } ? 1 : 0;
-            Expression[] args = new Expression[expressions.Length + firstArgOffset + secondArgOffset];
+            var lastArgOffset = lastArg is { } ? 1 : 0;
+            Expression[] args = new Expression[expressions.Length + firstArgOffset + lastArgOffset];
 
-            if (firstArg is { }) args[0] = firstArg;
+            if (firstArgOffset != 0)
+                args[0] = firstArg!;
 
             for (var i = 0; i < expressions.Length; i++)
             {
                 args[i + firstArgOffset] = AnalyzeExpression(expressions[i], scope);
             }
 
-            if (secondArgOffset != 0)
+            if (lastArgOffset != 0)
                 args[^1] = lastArg!;
 
             return args;
@@ -117,31 +127,32 @@ namespace Sympl.Analysis
         /// <summary>
         /// Returns a dynamic InvokeMember or Invoke expression, depending on the Function expression.
         /// </summary>
-        public static DynamicExpression AnalyzeCall(SymplCall expression, AnalysisScope scope) =>
-            expression.Function is SymplDot dottedExpr
-                // last expression must be an id
-                ? Expression.Dynamic(
-                    scope.GetContext().GetInvokeMemberBinder(
-                        new InvokeMemberBinderKey(
-                            ((SymplIdentifier) dottedExpr.Expressions[^1]).IdToken.Name,
-                            new CallInfo(expression.Arguments.Length))),
-                        typeof(Object),
-                        Analyze(
-                            expression.Arguments,
-                            scope,
-                            dottedExpr.Expressions.Length > 1
-                                // create a new dot expression for the object that doesn't include the last part
-                                ? AnalyzeDot(new SymplDot(dottedExpr.Target, RuntimeHelpers.RemoveLast(dottedExpr.Expressions), SourceSpan.None), scope)
-                                : AnalyzeExpression(dottedExpr.Target, scope)))
-                // Use DynamicExpression so that I don't always have to have a delegate to call, such as what
-                // happens with IronPython interop.
-                : Expression.Dynamic(
-                    scope.GetContext().GetInvokeBinder(new CallInfo(expression.Arguments.Length)),
-                    typeof(Object),
-                    Analyze(
-                        expression.Arguments,
-                        scope,
-                        AnalyzeExpression(expression.Function, scope)));
+        public static DynamicExpression AnalyzeCall(SymplCall expression, AnalysisScope scope)
+        {
+            System.Runtime.CompilerServices.CallSiteBinder binder = expression.Function switch
+            {
+                SymplDot dottedExpr => scope.Context.InvokeMember(new InvokeMemberBinderKey(
+                        ((SymplIdentifier) dottedExpr.Expressions[^1]).IdToken.Name,
+                        new CallInfo(expression.Arguments.Length))),
+
+                _ => scope.Context.Invoke(new CallInfo(expression.Arguments.Length))
+            };
+
+            var firstArg = expression.Function switch
+            {
+                // create a new dot expression for the object that doesn't include the last part
+                SymplDot dottedExpr when dottedExpr.Expressions.Length > 1
+                    => AnalyzeDot(new SymplDot(dottedExpr.Target, RuntimeHelpers.RemoveLast(dottedExpr.Expressions), SourceSpan.None), scope),
+
+                SymplDot dottedExpr => AnalyzeExpression(dottedExpr.Target, scope),
+                _ => AnalyzeExpression(expression.Function, scope)
+            };
+
+            return Expression.Dynamic(
+                binder,
+                typeof(Object),
+                Analyze(expression.Arguments, scope, firstArg));
+        }
 
         /// <summary>
         /// Returns a chain of GetMember and InvokeMember dynamic expressions for the dotted expression.
@@ -153,15 +164,20 @@ namespace Sympl.Analysis
             {
                 curExpr = e switch
                 {
-                    SymplIdentifier identifier => Expression.Dynamic(scope.GetContext().GetGetMemberBinder(identifier.IdToken.Name), typeof(Object), curExpr),
+                    SymplIdentifier identifier => Expression.Dynamic(
+                        scope.Context.GetMember(identifier.IdToken.Name),
+                        typeof(Object),
+                        curExpr),
+
                     SymplCall call => Expression.Dynamic(
                         // Dotted expressions must be simple invoke members, a.b.(c ...)
-                        scope.GetContext().GetInvokeMemberBinder(
+                        scope.Context.InvokeMember(
                             new InvokeMemberBinderKey(
                                 ((SymplIdentifier) call.Function).IdToken.Name,
                                 new CallInfo(call.Arguments.Length))),
                         typeof(Object),
                         Analyze(call.Arguments, scope, curExpr)),
+
                     _ => throw new InvalidOperationException("Internal: dotted must be IDs or Funs."),
                 };
             }
@@ -180,26 +196,22 @@ namespace Sympl.Analysis
                 case SymplIdentifier idExpr:
                     var lhs = AnalyzeExpression(expression.Source, scope);
                     var val = AnalyzeExpression(expression.Value, scope);
-                    var param = FindIdDef(idExpr.IdToken.Name, scope);
-                    if (param is { })
-                    {
-                        // Assign returns value stored.
-                        return Expression.Assign(lhs, Expression.Convert(val, param.Type));
-                    }
-                    else
-                    {
-                        var tmp = Expression.Parameter(typeof(Object), "assignTmpForRes");
-                        // Ensure stored value is returned. Had some erroneous MOs come through here and
-                        // left the code for example.
-                        return Expression.Block(new[] { tmp },
-                            Expression.Assign(tmp, Expression.Convert(val, typeof(Object))),
-                            Expression.Dynamic(scope.GetContext().GetSetMemberBinder(idExpr.IdToken.Name), typeof(Object),
-                                scope.GetModuleExpression(), tmp), tmp);
-                    }
+
+                    if (FindDeclaredIdentifier(idExpr.IdToken.Name, scope) is { } param)
+                        return Expression.Assign(lhs, Expression.Convert(val, param.Type)); // Assign returns value stored.
+
+                    var tmp = Expression.Parameter(typeof(Object), "assignTmpForRes");
+                    // Ensure stored value is returned. Had some erroneous MOs come through here and
+                    // left the code for example.
+                    return Expression.Block(new[] { tmp },
+                        Expression.Assign(tmp, Expression.Convert(val, typeof(Object))),
+                        Expression.Dynamic(scope.Context.SetMember(idExpr.IdToken.Name), typeof(Object),
+                            scope.Module, tmp), tmp);
+
                 case SymplElt eltExpr:
-                    // Trusting MO convention to return stored values.
+                    // Trusting meta-object convention of returning stored values.
                     return Expression.Dynamic(
-                        scope.GetContext().GetSetIndexBinder(new CallInfo(eltExpr.Indexes.Length)),
+                        scope.Context.SetIndex(new CallInfo(eltExpr.Indexes.Length)),
                         typeof(Object),
                         Analyze(
                             eltExpr.Indexes,
@@ -212,18 +224,19 @@ namespace Sympl.Analysis
                 // AnalyzeFunctionCall), and use a
                 // temp and block.
                 case SymplDot dottedExpr when dottedExpr.Expressions.Length > 1:
-                    throw new InvalidOperationException(
-                        "Don't support assigning with more than simple dotted expression, o.foo.");
+                    throw new InvalidOperationException("Don't support assigning with more than simple dotted expression, o.foo.");
+
                 case SymplDot dottedExpr when !(dottedExpr.Expressions[0] is SymplIdentifier):
-                    throw new InvalidOperationException(
-                        "Only support un-indexed field or property when assigning dotted expression location.");
+                    throw new InvalidOperationException("Only support un-indexed field or property when assigning dotted expression location.");
+
                 case SymplDot dottedExpr:
-                    // Trusting MOs convention to return stored values.
+                    // Trusting meta-object convention of returning stored values.
                     return Expression.Dynamic(
-                        scope.GetContext().GetSetMemberBinder(((SymplIdentifier) dottedExpr.Expressions[0]).IdToken.Name),
+                        scope.Context.SetMember(((SymplIdentifier) dottedExpr.Expressions[0]).IdToken.Name),
                         typeof(Object),
                         AnalyzeExpression(dottedExpr.Target, scope),
                         AnalyzeExpression(expression.Value, scope));
+
                 default:
                     throw new InvalidOperationException("Invalid left hand side type.");
             }
@@ -248,16 +261,19 @@ namespace Sympl.Analysis
             }
             else
             {
-                var param = FindIdDef(expression.IdToken.Name, scope);
-
-                return param ?? Expression.Dynamic(scope.GetContext().GetGetMemberBinder(expression.IdToken.Name), typeof(Object), scope.GetModuleExpression());
+                return FindDeclaredIdentifier(expression.IdToken.Name, scope)
+                    ?? Expression.Dynamic(
+                        scope.Context.GetMember(expression.IdToken.Name),
+                        typeof(Object),
+                        scope.Module);
             }
+
         }
 
         /// <summary>
-        /// Returns the ParameterExpr for the name by searching the scopes, or it returns None.
+        /// Returns the <see cref="ParameterExpression"/> for the name by searching the scopes, or it returns None.
         /// </summary>
-        static Expression? FindIdDef(String name, AnalysisScope scope)
+        static Expression? FindDeclaredIdentifier(String name, AnalysisScope scope)
         {
             AnalysisScope? currentScope = scope;
             while (currentScope is { } && !currentScope.IsModule)
@@ -318,7 +334,7 @@ namespace Sympl.Analysis
         /// expression for it.
         /// </summary>
         public static Expression AnalyzeQuote(SymplQuote expression, AnalysisScope scope) =>
-            Expression.Constant(MakeQuoteConstant(expression.Expression, scope.GetContext()));
+            Expression.Constant(MakeQuoteConstant(expression.Expression, scope.Context));
 
         static Object? MakeQuoteConstant(Object expression, SymplContext context) => expression switch
         {
@@ -328,20 +344,27 @@ namespace Sympl.Analysis
             _ => throw new InvalidOperationException($"Internal: quoted list has -- {expression}"),
         };
 
-        public static Expression AnalyzeEq(SymplEq expression, AnalysisScope scope) => Expression.Call(WellKnownSymbols.Eq,
+        public static Expression AnalyzeEq(SymplEq expression, AnalysisScope scope)
+            => Expression.Call(
+                WellKnownSymbols.Eq,
                 Expression.Convert(AnalyzeExpression(expression.Left, scope), typeof(Object)),
                 Expression.Convert(AnalyzeExpression(expression.Right, scope), typeof(Object)));
 
-        public static Expression AnalyzeCons(SymplCons expression, AnalysisScope scope) => Expression.Call(WellKnownSymbols.MakeCons,
+        public static Expression AnalyzeCons(SymplCons expression, AnalysisScope scope)
+            => Expression.Call(
+                WellKnownSymbols.MakeCons,
                 Expression.Convert(AnalyzeExpression(expression.Left, scope), typeof(Object)),
                 Expression.Convert(AnalyzeExpression(expression.Right, scope), typeof(Object)));
 
-        public static Expression AnalyzeListCall(SymplListCall expression, AnalysisScope scope) => Expression.Call(
-            WellKnownSymbols._List,
-            Expression.NewArrayInit(typeof(Object),
+        public static Expression AnalyzeListCall(SymplListCall expression, AnalysisScope scope)
+            => Expression.Call(
+                WellKnownSymbols._List,
+                Expression.NewArrayInit(typeof(Object),
                 Array.ConvertAll(expression.Elements, e => Expression.Convert(AnalyzeExpression(e, scope), typeof(Object)))));
 
-        public static Expression AnalyzeIf(SymplIf expression, AnalysisScope scope) => Expression.Condition(WrapBooleanTest(AnalyzeExpression(expression.Test, scope)),
+        public static Expression AnalyzeIf(SymplIf expression, AnalysisScope scope)
+            => Expression.Condition(
+                WrapBooleanTest(AnalyzeExpression(expression.Test, scope)),
                 Expression.Convert(AnalyzeExpression(expression.Consequent, scope), typeof(Object)),
                 Expression.Convert(expression.Alternative is { } ? AnalyzeExpression(expression.Alternative, scope) : Expression.Constant(false), typeof(Object)));
 
@@ -349,7 +372,8 @@ namespace Sympl.Analysis
         {
             var tmp = Expression.Parameter(typeof(Object), "testtmp");
             return Expression.Block(new[] { tmp },
-                Expression.Assign(tmp, Expression.Convert(expression, typeof(Object))), Expression.Condition(
+                Expression.Assign(tmp, Expression.Convert(expression, typeof(Object))),
+                Expression.Condition(
                     Expression.TypeIs(tmp, typeof(Boolean)),
                     Expression.Convert(tmp, typeof(Boolean)),
                     Expression.NotEqual(tmp, Expression.Constant(null, typeof(Object)))));
@@ -400,7 +424,7 @@ namespace Sympl.Analysis
         }
 
         public static Expression AnalyzeNew(SymplNew expression, AnalysisScope scope) => Expression.Dynamic(
-            scope.GetContext().GetCreateInstanceBinder(new CallInfo(expression.Arguments.Length)),
+            scope.Context.CreateInstance(new CallInfo(expression.Arguments.Length)),
             typeof(Object),
             Analyze(expression.Arguments, scope, AnalyzeExpression(expression.Type, scope)));
 
@@ -436,7 +460,7 @@ namespace Sympl.Analysis
                     return AnalyzeLetStar(new SymplLetStar(new[] { binding1 }, new[] { ifExpr1 }, SourceSpan.None), scope);
                 default:
                     return Expression.Dynamic(
-                        scope.GetContext().GetBinaryOperationBinder(expression.Operation),
+                        scope.Context.Binary(expression.Operation),
                         typeof(Object),
                         AnalyzeExpression(expression.Left, scope),
                         AnalyzeExpression(expression.Right, scope));
@@ -451,7 +475,7 @@ namespace Sympl.Analysis
             }
 
             // Example purposes only, we should never get here since we only have Not.
-            return Expression.Dynamic(scope.GetContext().GetUnaryOperationBinder(expression.Operation),
+            return Expression.Dynamic(scope.Context.Unary(expression.Operation),
                 typeof(Object),
                 AnalyzeExpression(expression.Operand, scope));
         }
@@ -464,7 +488,7 @@ namespace Sympl.Analysis
         /// assignment in <see cref="AnalyzeAssignment(SymplSet, AnalysisScope)"/>.
         /// </devdoc>
         public static Expression AnalyzeElt(SymplElt expression, AnalysisScope scope) => Expression.Dynamic(
-                scope.GetContext().GetGetIndexBinder(new CallInfo(expression.Indexes.Length)),
+                scope.Context.GetIndex(new CallInfo(expression.Indexes.Length)),
                 typeof(Object),
                 Analyze(expression.Indexes, scope, AnalyzeExpression(expression.ObjectExpr, scope)));
     }

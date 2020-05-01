@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq.Expressions;
 using Microsoft.Scripting;
 using Microsoft.Scripting.Runtime;
 
@@ -127,6 +126,7 @@ namespace Sympl.Syntax
             while (!IsIdTerminator((Char) reader.Peek())) { reader.Read(); }
 
             return MakeIdOrKeywordToken(isQuoted);
+
         }
 
         /// <devdoc>
@@ -163,7 +163,7 @@ namespace Sympl.Syntax
         /// </devdoc>
         static readonly Char[] IdTerminators = { '(', ')', '"', ';', ',', /*'`',*/ '@', '\'', '.' };
 
-        static Boolean IsIdTerminator(Char c) => Array.IndexOf(IdTerminators, c) != -1 || (c < (Char) 0x21);
+        static Boolean IsIdTerminator(Char c) => Array.IndexOf(IdTerminators, c) != -1 || (c < (Char) 0x21) || c == EOF;
 
         /// <summary>
         /// Returns parsed integers as NumberTokens.
@@ -171,10 +171,21 @@ namespace Sympl.Syntax
         NumberToken GetNumber()
         {
             // Check integrity before loop to avoid accidentally returning zero.
-            while (IsNumChar((Char) reader.Peek())) { reader.Read();  }
+            while (IsNumChar((Char) reader.Peek())) { reader.Read(); }
             reader.MarkSingleLineTokenEnd();
 
-            return new NumberToken(Double.Parse(reader.GetTokenString(), CultureInfo.InvariantCulture), reader.TokenSpan);
+            var str = reader.GetTokenString();
+
+            if (Int32.TryParse(str, NumberStyles.Number, CultureInfo.InvariantCulture, out var @int))
+                return new NumberToken(@int, reader.TokenSpan);
+            else if (Double.TryParse(str, NumberStyles.Number, CultureInfo.InvariantCulture, out var @double))
+                return new NumberToken(@double, reader.TokenSpan);
+            else
+            {
+                Context.Errors.Add(Context.SourceUnit, "Invalid numeric literal", reader.TokenSpan, 100, Severity.FatalError);
+                return new NumberToken(reader.TokenSpan);
+            }
+
         }
 
         StringToken GetString()

@@ -25,25 +25,25 @@ namespace Sympl.Analysis
         {
             Parent = parent;
             this.name = name;
-            Context = context;
-            
+            ThisContext = context;
+
             Runtime = runtimeParam;
-            Module = moduleParam;   
+            ThisModule = moduleParam;
             IsLambda = false;
         }
 
         public AnalysisScope? Parent { get; }
 
-        public ParameterExpression? Module { get; }
+        public ParameterExpression? ThisModule { get; }
 
         public ParameterExpression? Runtime { get; }
 
         /// <devdoc>
         /// Need runtime for interning Symbol constants at code gen time.
         /// </devdoc>
-        public SymplContext? Context { get; }
+        public SymplContext? ThisContext { get; }
 
-        public Boolean IsModule => Module is { };
+        public Boolean IsModule => ThisModule is { };
 
         /// <devdoc>
         /// Need IsLambda when support return to find tightest closing fun.
@@ -65,26 +65,32 @@ namespace Sympl.Analysis
         public Dictionary<String, ParameterExpression> Names { get; set; } =
             new Dictionary<String, ParameterExpression>(StringComparer.OrdinalIgnoreCase);
 
-        public ParameterExpression? GetModuleExpression()
+        public ParameterExpression? Module
         {
-            AnalysisScope? curScope = this;
-            while (curScope?.Module is null)
+            get
             {
-                curScope = curScope?.Parent;
-            }
+                AnalysisScope? curScope = this;
+                while (curScope?.ThisModule is null)
+                {
+                    curScope = curScope?.Parent;
+                }
 
-            return curScope.Module;
+                return curScope.ThisModule;
+            }
         }
 
-        public SymplContext GetContext()
+        public SymplContext Context
         {
-            AnalysisScope? curScope = this;
-            while (curScope?.Context is null)
+            get
             {
-                curScope = curScope?.Parent;
-            }
+                AnalysisScope? curScope = this;
+                while (curScope?.ThisContext is null)
+                {
+                    curScope = curScope?.Parent;
+                }
 
-            return curScope.Context;
+                return curScope.ThisContext;
+            }
         }
     }
 }
