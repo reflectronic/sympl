@@ -1,18 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-    <RootNamespace>Sympl</RootNamespace>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-    
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <LangVersion>preview</LangVersion>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <RootNamespace>Sympl</RootNamespace>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
     <ItemGroup>
         <Content Include="$(SolutionDir)/Sympl.Samples/**/*.*" CopyToOutputDirectory="Always" LinkBase="Sympl.Samples/" />
     </ItemGroup>
-    
-  
-  <ItemGroup>
-    <ProjectReference Include="..\Sympl.Compiler\Sympl.Compiler.csproj" />
-  </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Sympl.Compiler\Sympl.Compiler.csproj" />
+    </ItemGroup>
+
 </Project>
