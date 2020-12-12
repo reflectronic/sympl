@@ -12,7 +12,7 @@ namespace Sympl.Binders
         {
         }
 
-        public override DynamicMetaObject FallbackInvoke(DynamicMetaObject target, DynamicMetaObject[] args, DynamicMetaObject errorSuggestion)
+        public override DynamicMetaObject FallbackInvoke(DynamicMetaObject target, DynamicMetaObject[] args, DynamicMetaObject? errorSuggestion)
         {
             // First try COM binding.
             if (ComBinder.TryBindInvoke(this, target, args, out var result))

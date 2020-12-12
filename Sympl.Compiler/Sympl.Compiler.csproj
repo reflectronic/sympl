@@ -2,21 +2,16 @@
 
     <PropertyGroup>
         <LangVersion>preview</LangVersion>
-        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <TargetFramework>net5.0</TargetFramework>
         <RootNamespace>Sympl</RootNamespace>
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="DynamicLanguageRuntime" Version="1.2.3-candidate1" />
-        <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers" Version="2.9.8" />
     </ItemGroup>
-
+    
     <ItemGroup>
-        <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="3.7.0-1.20251.6">
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
+      <None Include="..\.editorconfig" />
     </ItemGroup>
-
 </Project>

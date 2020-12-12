@@ -13,7 +13,7 @@ namespace Sympl.Binders
         {
         }
 
-        public override DynamicMetaObject FallbackSetIndex(DynamicMetaObject target, DynamicMetaObject[] indexes, DynamicMetaObject value, DynamicMetaObject errorSuggestion)
+        public override DynamicMetaObject FallbackSetIndex(DynamicMetaObject target, DynamicMetaObject[] indexes, DynamicMetaObject value, DynamicMetaObject? errorSuggestion)
         {
             // First try COM binding.
             if (ComBinder.TryBindSetIndex(this, target, indexes, value, out var result))

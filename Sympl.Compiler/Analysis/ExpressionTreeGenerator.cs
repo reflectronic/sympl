@@ -46,8 +46,8 @@ namespace Sympl.Analysis
             }
 
             return Expression.Call(
-                typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.Import)),
-                scope.Runtime,
+                typeof(RuntimeHelpers).GetMethod(nameof(RuntimeHelpers.Import))!,
+                scope.Runtime!,
                 scope.ThisModule,
                 Expression.Constant(Array.ConvertAll(expression.Namespaces, id => id.Name)),
                 Expression.Constant(Array.ConvertAll(expression.MemberNames, id => id.Name)),
@@ -105,8 +105,8 @@ namespace Sympl.Analysis
         /// </summary>
         static Expression[] Analyze(SymplExpression[] expressions, AnalysisScope scope, Expression? firstArg = null, Expression? lastArg = null)
         {
-            var firstArgOffset = firstArg is { } ? 1 : 0;
-            var lastArgOffset = lastArg is { } ? 1 : 0;
+            var firstArgOffset = firstArg is null ? 0 : 1;
+            var lastArgOffset = lastArg is null ? 0 : 1;
             Expression[] args = new Expression[expressions.Length + firstArgOffset + lastArgOffset];
 
             if (firstArgOffset != 0)
@@ -197,7 +197,7 @@ namespace Sympl.Analysis
                     var lhs = AnalyzeExpression(expression.Source, scope);
                     var val = AnalyzeExpression(expression.Value, scope);
 
-                    if (FindDeclaredIdentifier(idExpr.IdToken.Name, scope) is { } param)
+                    if (FindDeclaredIdentifier(idExpr.IdToken.Name, scope) is Expression param)
                         return Expression.Assign(lhs, Expression.Convert(val, param.Type)); // Assign returns value stored.
 
                     var tmp = Expression.Parameter(typeof(Object), "assignTmpForRes");
@@ -206,7 +206,7 @@ namespace Sympl.Analysis
                     return Expression.Block(new[] { tmp },
                         Expression.Assign(tmp, Expression.Convert(val, typeof(Object))),
                         Expression.Dynamic(scope.Context.SetMember(idExpr.IdToken.Name), typeof(Object),
-                            scope.Module, tmp), tmp);
+                            scope.Module!, tmp), tmp);
 
                 case SymplElt eltExpr:
                     // Trusting meta-object convention of returning stored values.
@@ -265,7 +265,7 @@ namespace Sympl.Analysis
                     ?? Expression.Dynamic(
                         scope.Context.GetMember(expression.IdToken.Name),
                         typeof(Object),
-                        scope.Module);
+                        scope.Module!);
             }
 
         }
@@ -276,7 +276,7 @@ namespace Sympl.Analysis
         static Expression? FindDeclaredIdentifier(String name, AnalysisScope scope)
         {
             AnalysisScope? currentScope = scope;
-            while (currentScope is { } && !currentScope.IsModule)
+            while (currentScope is not null && !currentScope.IsModule)
             {
                 if (currentScope.Names.TryGetValue(name, out var res))
                     return res;
@@ -366,7 +366,7 @@ namespace Sympl.Analysis
             => Expression.Condition(
                 WrapBooleanTest(AnalyzeExpression(expression.Test, scope)),
                 Expression.Convert(AnalyzeExpression(expression.Consequent, scope), typeof(Object)),
-                Expression.Convert(expression.Alternative is { } ? AnalyzeExpression(expression.Alternative, scope) : Expression.Constant(false), typeof(Object)));
+                Expression.Convert(expression.Alternative is not null ? AnalyzeExpression(expression.Alternative, scope) : Expression.Constant(false), typeof(Object)));
 
         static Expression WrapBooleanTest(Expression expression)
         {
@@ -407,7 +407,7 @@ namespace Sympl.Analysis
             // Break factory doesn't set the GotoExpression.Type property to the type of the LoopBreak
             // label target's type. For example, removing this would cause the Convert to object for
             // an If branch to throw because the Goto is void without this last argument.
-            return Expression.Break(loopScope.LoopBreak, value, typeof(Object));
+            return Expression.Break(loopScope.LoopBreak!, value, typeof(Object));
         }
 
         /// <summary>

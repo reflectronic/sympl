@@ -16,7 +16,7 @@ namespace Sympl.Binders
         {
         }
 
-        public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject errorSuggestion)
+        public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject? errorSuggestion)
         {
             // First try COM binding.
             if (ComBinder.TryBindGetMember(this, target, out var result, true))
@@ -32,7 +32,7 @@ namespace Sympl.Binders
             return members.Length == 1
                 ? new DynamicMetaObject(
                     RuntimeHelpers.EnsureObjectResult(Expression.MakeMemberAccess(
-                        Expression.Convert(target.Expression, members[0].DeclaringType), members[0])),
+                        Expression.Convert(target.Expression, members[0].DeclaringType!), members[0])),
                     // Don't need restriction test for name since this rule is only used where binder
                     // is used, which is only used in sites with this binder.Name.
                     BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType))

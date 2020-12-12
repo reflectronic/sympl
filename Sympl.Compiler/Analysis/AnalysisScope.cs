@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using Sympl.Hosting;
 using Sympl.Runtime;
@@ -43,7 +44,8 @@ namespace Sympl.Analysis
         /// </devdoc>
         public SymplContext? ThisContext { get; }
 
-        public Boolean IsModule => ThisModule is { };
+        [MemberNotNullWhen(true, nameof(ThisModule))]
+        public Boolean IsModule => ThisModule is not null;
 
         /// <devdoc>
         /// Need IsLambda when support return to find tightest closing fun.

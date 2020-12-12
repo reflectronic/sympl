@@ -10,16 +10,15 @@ namespace Sympl.Binders
         {
         }
 
-        public override DynamicMetaObject FallbackUnaryOperation(DynamicMetaObject target,
-            DynamicMetaObject errorSuggestion) =>
+        public override DynamicMetaObject FallbackUnaryOperation(DynamicMetaObject target, DynamicMetaObject? errorSuggestion) =>
             // Defer if any object has no value so that we evaluate their Expressions and nest a
             // CallSite for the InvokeMember.
-            !target.HasValue
-                ? Defer(target)
-                : new DynamicMetaObject(
+            target.HasValue
+                ? new DynamicMetaObject(
                     RuntimeHelpers.EnsureObjectResult(Expression.MakeUnary(Operation,
                         Expression.Convert(target.Expression, target.LimitType), target.LimitType)),
                     target.Restrictions.Merge(
-                        BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType)));
+                        BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType)))
+                : Defer(target);
     }
 }

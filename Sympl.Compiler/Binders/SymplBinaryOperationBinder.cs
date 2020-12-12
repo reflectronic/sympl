@@ -10,9 +10,7 @@ namespace Sympl.Binders
         {
         }
 
-        public override DynamicMetaObject FallbackBinaryOperation(DynamicMetaObject target, 
-            DynamicMetaObject arg,
-            DynamicMetaObject errorSuggestion)
+        public override DynamicMetaObject FallbackBinaryOperation(DynamicMetaObject target, DynamicMetaObject arg, DynamicMetaObject? errorSuggestion)
         {
             // Defer if any object has no value so that we evaluate their Expressions and nest a
             // CallSite for the InvokeMember.

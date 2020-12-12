@@ -13,7 +13,7 @@ namespace Sympl.Binders
         {
         }
 
-        public override DynamicMetaObject FallbackCreateInstance(DynamicMetaObject target, DynamicMetaObject[] args, DynamicMetaObject errorSuggestion)
+        public override DynamicMetaObject FallbackCreateInstance(DynamicMetaObject target, DynamicMetaObject[] args, DynamicMetaObject? errorSuggestion)
         {
             // Defer if any object has no value so that we evaluate their Expressions and nest a
             // CallSite for the InvokeMember.
@@ -35,12 +35,11 @@ namespace Sympl.Binders
             }
 
             var type = target.Value as Type;
-            Debug.Assert(type is { });
+            Debug.Assert(type is not null);
             var constructors = type.GetConstructors();
             // Get constructors with right arg counts.
 
             var res = Array.FindAll(constructors, c => c.GetParameters().Length == args.Length && RuntimeHelpers.ParametersMatchArguments(c.GetParameters(), args));
-
 
             // We generate an instance restriction on the target since it is a Type and the
             // constructor is associate with the actual Type instance.

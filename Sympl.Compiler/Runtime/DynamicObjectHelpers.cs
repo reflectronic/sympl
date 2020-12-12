@@ -41,7 +41,7 @@ namespace Sympl.Runtime
             }
 
             public override DynamicMetaObject
-                FallbackGetMember(DynamicMetaObject target, DynamicMetaObject errorSuggestion) =>
+                FallbackGetMember(DynamicMetaObject target, DynamicMetaObject? errorSuggestion) =>
                 errorSuggestion ?? new DynamicMetaObject(Expression.Constant(Sentinel),
                     target.Restrictions.Merge(BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType)));
         }
@@ -67,7 +67,7 @@ namespace Sympl.Runtime
             }
 
             public override DynamicMetaObject
-                FallbackSetMember(DynamicMetaObject target, DynamicMetaObject value, DynamicMetaObject errorSuggestion) =>
+                FallbackSetMember(DynamicMetaObject target, DynamicMetaObject value, DynamicMetaObject? errorSuggestion) =>
                 errorSuggestion ?? RuntimeHelpers.CreateThrow(target, null, BindingRestrictions.Empty,
                     typeof(MissingMemberException),
                     "If IDynObj doesn't support setting members, DOHelpers can't do it for the IDO.");

@@ -18,7 +18,7 @@ namespace Sympl
             if (compiledCode is null) return null;
 
             Object? result = compiledCode.Execute(scope);
-            if (result is { })
+            if (result is not null)
                 Console.WriteLine(result.ToString(), Style.Out);
 
             return result;

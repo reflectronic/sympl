@@ -271,7 +271,7 @@ namespace Sympl.Syntax
                         _ => throw Assert.Unreachable
                     }, 100);
 
-            return Array.FindAll(Array.ConvertAll(list, l => l as IdOrKeywordToken), f => f is { })!;
+            return Array.FindAll(Array.ConvertAll(list, l => l as IdOrKeywordToken), f => f is not null)!;
         }
 
         /// <summary>
@@ -652,7 +652,7 @@ namespace Sympl.Syntax
             var current = this.current;
             this.current = peek ?? lexer.GetToken();
 
-            if (peek is { })
+            if (peek is not null)
                 peek = null;
 
             return current;

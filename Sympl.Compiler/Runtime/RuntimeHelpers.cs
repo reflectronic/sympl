@@ -129,13 +129,13 @@ namespace Sympl.Runtime
 
         static Cons NthCdr(Cons? lst, Int32 i)
         {
-            while (i > 0 && lst is { })
+            while (i > 0 && lst is not null)
             {
                 lst = lst.Rest as Cons;
                 i--;
             }
 
-            if (i == 0 && lst is { })
+            if (i == 0 && lst is not null)
             {
                 return lst;
             }
@@ -362,7 +362,7 @@ namespace Sympl.Runtime
         {
             Expression[]? argExpressions = null;
             var argTypes = Type.EmptyTypes;
-            if (exceptionArgs is { })
+            if (exceptionArgs is not null)
             {
                 argExpressions = new Expression[exceptionArgs.Length];
                 argTypes = new Type[exceptionArgs.Length];

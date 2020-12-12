@@ -36,7 +36,7 @@ namespace Sympl.Hosting
     {
         internal CodeContext Context { get; private set; }
 
-        readonly HashSet<Assembly> assemblies = new HashSet<Assembly>();
+        readonly HashSet<Assembly> assemblies = new();
 
         public SymplContext(ScriptDomainManager manager, IDictionary<String, Object> options) : base(manager)
         {
@@ -68,7 +68,7 @@ namespace Sympl.Hosting
             var context = new CompilerContext(sourceUnit, options, counter);
             // TODO: Find a way to avoid generating the expression when we aren't interested in it
             // (e.g. REPL newline handling/tab completion)
-
+    
             var symplOptions = (SymplCompilerOptions) options;
 
             try
@@ -97,8 +97,8 @@ namespace Sympl.Hosting
 
                             var lambda = Expression.Lambda<Func<CodeContext, IDynamicMetaObjectProvider, Object>>(
                                 Expression.Convert(ExpressionTreeGenerator.AnalyzeExpression(ast, scope), typeof(Object)),
-                                scope.Runtime,
-                                scope.ThisModule);
+                                scope.Runtime!,
+                                scope.ThisModule!);
 
                             return new SymplCode(this, lambda, sourceUnit);
                         }
@@ -123,7 +123,7 @@ namespace Sympl.Hosting
                             body[^1] = Expression.Constant(null);
 
                             var lambda = Expression.Lambda<Func<CodeContext, IDynamicMetaObjectProvider, Object>>(Expression.Block(body),
-                                    scope.Runtime, scope.ThisModule);
+                                    scope.Runtime!, scope.ThisModule!);
 
                             return new SymplCode(this, lambda, sourceUnit);
                         }
@@ -131,9 +131,7 @@ namespace Sympl.Hosting
                         throw Assert.Unreachable;
                 }
             }
-#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception e)
-#pragma warning restore CA1031 // Do not catch general exception types
             {
                 errorSink.Add(sourceUnit, $"Internal error: " + e.ToString(), SourceSpan.None, 9999, Severity.FatalError);
                 return null;
@@ -224,13 +222,13 @@ namespace Sympl.Hosting
             moduleFun.Compile().Invoke(Context, module);
         }*/
 
-        public static ExpandoObject NewScope() => new ExpandoObject();
+        public static ExpandoObject NewScope() => new();
 
         /// <summary>
         /// Returns the Symbol interned in this runtime if it is already there. If not, this makes
         /// the Symbol and interns it.
         /// </summary>
-        public Symbol MakeSymbol(String name) => Context.Symbols.GetOrAdd(name, name => new Symbol(name));
+        public Symbol MakeSymbol(String name) => Context.Symbols.GetOrAdd(name, name => new(name));
 
         /////////////////////////
         // Canonicalizing Binders
@@ -246,31 +244,31 @@ namespace Sympl.Hosting
 
         // TODO: Use DefaultBinder
 
-        readonly ConcurrentDictionary<String, SymplGetMemberBinder> getMemberBinders = new ConcurrentDictionary<String, SymplGetMemberBinder>(StringComparer.OrdinalIgnoreCase);
-        public SymplGetMemberBinder GetMember(String name) => getMemberBinders.GetOrAdd(name, name => new SymplGetMemberBinder(name));
+        readonly ConcurrentDictionary<String, SymplGetMemberBinder> getMemberBinders = new(StringComparer.OrdinalIgnoreCase);
+        public SymplGetMemberBinder GetMember(String name) => getMemberBinders.GetOrAdd(name, name => new (name));
 
-        readonly ConcurrentDictionary<String, SymplSetMemberBinder> setMemberBinders = new ConcurrentDictionary<String, SymplSetMemberBinder>(StringComparer.OrdinalIgnoreCase);
-        public SymplSetMemberBinder SetMember(String name) => setMemberBinders.GetOrAdd(name, name => new SymplSetMemberBinder(name));
+        readonly ConcurrentDictionary<String, SymplSetMemberBinder> setMemberBinders = new(StringComparer.OrdinalIgnoreCase);
+        public SymplSetMemberBinder SetMember(String name) => setMemberBinders.GetOrAdd(name, name => new(name));
 
-        readonly ConcurrentDictionary<CallInfo, SymplInvokeBinder> invokeBinders = new ConcurrentDictionary<CallInfo, SymplInvokeBinder>();
-        public SymplInvokeBinder Invoke(CallInfo info) => invokeBinders.GetOrAdd(info, info => new SymplInvokeBinder(info));
+        readonly ConcurrentDictionary<CallInfo, SymplInvokeBinder> invokeBinders = new();
+        public SymplInvokeBinder Invoke(CallInfo info) => invokeBinders.GetOrAdd(info, info => new(info));
 
-        readonly ConcurrentDictionary<InvokeMemberBinderKey, SymplInvokeMemberBinder> invokeMemberBinders = new ConcurrentDictionary<InvokeMemberBinderKey, SymplInvokeMemberBinder>();
-        public SymplInvokeMemberBinder InvokeMember(InvokeMemberBinderKey info) => invokeMemberBinders.GetOrAdd(info, info => new SymplInvokeMemberBinder(info.Name, info.Info));
+        readonly ConcurrentDictionary<InvokeMemberBinderKey, SymplInvokeMemberBinder> invokeMemberBinders = new();
+        public SymplInvokeMemberBinder InvokeMember(InvokeMemberBinderKey info) => invokeMemberBinders.GetOrAdd(info, info => new(info.Name, info.Info));
 
-        readonly ConcurrentDictionary<CallInfo, SymplCreateInstanceBinder> createInstanceBinders = new ConcurrentDictionary<CallInfo, SymplCreateInstanceBinder>();
-        public SymplCreateInstanceBinder CreateInstance(CallInfo info) => createInstanceBinders.GetOrAdd(info, info => new SymplCreateInstanceBinder(info));
+        readonly ConcurrentDictionary<CallInfo, SymplCreateInstanceBinder> createInstanceBinders = new();
+        public SymplCreateInstanceBinder CreateInstance(CallInfo info) => createInstanceBinders.GetOrAdd(info, info => new(info));
 
-        readonly ConcurrentDictionary<CallInfo, SymplGetIndexBinder> getIndexBinders = new ConcurrentDictionary<CallInfo, SymplGetIndexBinder>();
-        public SymplGetIndexBinder GetIndex(CallInfo info) => getIndexBinders.GetOrAdd(info, info => new SymplGetIndexBinder(info));
+        readonly ConcurrentDictionary<CallInfo, SymplGetIndexBinder> getIndexBinders = new();
+        public SymplGetIndexBinder GetIndex(CallInfo info) => getIndexBinders.GetOrAdd(info, info => new(info));
 
-        readonly ConcurrentDictionary<CallInfo, SymplSetIndexBinder> setIndexBinders = new ConcurrentDictionary<CallInfo, SymplSetIndexBinder>();
-        public SymplSetIndexBinder SetIndex(CallInfo info) => setIndexBinders.GetOrAdd(info, info => new SymplSetIndexBinder(info));
+        readonly ConcurrentDictionary<CallInfo, SymplSetIndexBinder> setIndexBinders = new();
+        public SymplSetIndexBinder SetIndex(CallInfo info) => setIndexBinders.GetOrAdd(info, info => new(info));
 
-        readonly ConcurrentDictionary<ExpressionType, SymplBinaryOperationBinder> binaryOperationBinders = new ConcurrentDictionary<ExpressionType, SymplBinaryOperationBinder>();
-        public SymplBinaryOperationBinder Binary(ExpressionType op) => binaryOperationBinders.GetOrAdd(op, op => new SymplBinaryOperationBinder(op));
+        readonly ConcurrentDictionary<ExpressionType, SymplBinaryOperationBinder> binaryOperationBinders = new();
+        public SymplBinaryOperationBinder Binary(ExpressionType op) => binaryOperationBinders.GetOrAdd(op, op => new(op));
 
-        readonly ConcurrentDictionary<ExpressionType, SymplUnaryOperationBinder> unaryOperationBinders = new ConcurrentDictionary<ExpressionType, SymplUnaryOperationBinder>();
-        public SymplUnaryOperationBinder Unary(ExpressionType op) => unaryOperationBinders.GetOrAdd(op, op => new SymplUnaryOperationBinder(op));
+        readonly ConcurrentDictionary<ExpressionType, SymplUnaryOperationBinder> unaryOperationBinders = new();
+        public SymplUnaryOperationBinder Unary(ExpressionType op) => unaryOperationBinders.GetOrAdd(op, op => new(op));
     }
 }

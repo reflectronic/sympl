@@ -16,7 +16,7 @@ namespace Sympl.Runtime
             Cons? head = this;
             var res = "(";
 
-            while (head is { })
+            while (head is not null)
             {
                 res += head.First?.ToString() ?? "nil";
                 switch (head.Rest)
@@ -54,7 +54,9 @@ namespace Sympl.Runtime
             
             var head = new Cons(elements[0], null);
             var tail = head;
-            
+
+            String.Equals(null, null);
+
             foreach (var elt in RuntimeHelpers.RemoveFirstElt(elements))
             {
                 var cons = new Cons(elt, null);
