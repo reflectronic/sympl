@@ -12,6 +12,7 @@ using System.Reflection;
 using Microsoft.Scripting;
 using Microsoft.Scripting.Runtime;
 using Microsoft.Scripting.Utils;
+using Sympl.Expressions;
 
 namespace Sympl.Hosting
 {
@@ -76,6 +77,7 @@ namespace Sympl.Hosting
                 switch (sourceUnit.Kind)
                 {
                     case SourceCodeKind.Expression:
+                    case SourceCodeKind.AutoDetect:
                     case SourceCodeKind.SingleStatement:
                     case SourceCodeKind.InteractiveCode:
                         {
@@ -92,7 +94,7 @@ namespace Sympl.Hosting
                             }
 
                             var scope = new AnalysisScope(null, "__snippet__", Context.LanguageContext,
-                                Expression.Parameter(typeof(CodeContext), nameof(CodeContext)),
+                                Expression.Parameter(typeof(CodeContext), "codeContext"),
                                 Expression.Parameter(typeof(IDynamicMetaObjectProvider), "fileModule"));
 
                             var lambda = Expression.Lambda<Func<CodeContext, IDynamicMetaObjectProvider, Object>>(
@@ -103,7 +105,6 @@ namespace Sympl.Hosting
                             return new SymplCode(this, lambda, sourceUnit);
                         }
                     case SourceCodeKind.File:
-                    case SourceCodeKind.AutoDetect:
                     case SourceCodeKind.Statements:
                         {
                             var asts = Parser.ParseFile(context);

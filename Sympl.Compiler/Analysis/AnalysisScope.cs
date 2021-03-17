@@ -18,7 +18,7 @@ namespace Sympl.Analysis
     /// or top-level expression. The root has non-None ModuleExpr and RuntimeExpr, which are
     /// <see cref="ParameterExpression"/>s.
     /// </devdoc>
-    class AnalysisScope
+    public class AnalysisScope
     {
         readonly String name;
 

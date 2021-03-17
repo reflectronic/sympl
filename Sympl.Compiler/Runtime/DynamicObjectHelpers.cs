@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq.Expressions;
@@ -20,16 +21,12 @@ namespace Sympl.Runtime
 
         internal static Boolean HasMember(IDynamicMetaObjectProvider o, String name) => GetMember(o, name) != Sentinel;
 
-        static readonly Dictionary<String, CallSite<Func<CallSite, Object, Object>>> GetSites =
-            new Dictionary<String, CallSite<Func<CallSite, Object, Object>>>();
+        static readonly ConcurrentDictionary<String, CallSite<Func<CallSite, Object, Object>>> GetSites = new();
 
         internal static Object GetMember(IDynamicMetaObjectProvider o, String name)
         {
-            if (GetSites.TryGetValue(name, out var site)) 
-                return site.Target(site, o);
-            
-            site = CallSite<Func<CallSite, Object, Object>>.Create(new DynamicObjectHelpersGetMemberBinder(name));
-            GetSites[name] = site;
+            var site = GetSites.GetOrAdd(name,
+                name => CallSite<Func<CallSite, Object, Object>>.Create(new DynamicObjectHelpersGetMemberBinder(name)));
 
             return site.Target(site, o);
         }
@@ -46,16 +43,12 @@ namespace Sympl.Runtime
                     target.Restrictions.Merge(BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType)));
         }
 
-        static readonly Dictionary<String, CallSite<Action<CallSite, Object, Object>>> SetSites =
-            new Dictionary<String, CallSite<Action<CallSite, Object, Object>>>();
+        static readonly ConcurrentDictionary<String, CallSite<Action<CallSite, Object, Object>>> SetSites = new();
 
         internal static void SetMember(IDynamicMetaObjectProvider o, String name, Object value)
         {
-            if (!SetSites.TryGetValue(name, out var site))
-            {
-                site = CallSite<Action<CallSite, Object, Object>>.Create(new DynamicObjectHelpersSetMemberBinder(name));
-                SetSites[name] = site;
-            }
+            var site = SetSites.GetOrAdd(name,
+                name => CallSite<Action<CallSite, Object, Object>>.Create(new DynamicObjectHelpersSetMemberBinder(name)));
 
             site.Target(site, o, value);
         }

@@ -10,7 +10,7 @@ using Sympl.Syntax;
 
 namespace Sympl.Analysis
 {
-    internal static class ExpressionTreeGenerator
+    public static class ExpressionTreeGenerator
     {
         public static Expression AnalyzeExpression(SymplExpression expression, AnalysisScope scope) => expression switch
         {
@@ -38,7 +38,7 @@ namespace Sympl.Analysis
             _ => throw new InvalidOperationException("Internal: no expression to analyze.")
         };
 
-        public static Expression AnalyzeImport(SymplImport expression, AnalysisScope scope)
+        static Expression AnalyzeImport(SymplImport expression, AnalysisScope scope)
         {
             if (!scope.IsModule)
             {
@@ -54,7 +54,7 @@ namespace Sympl.Analysis
                 Expression.Constant(Array.ConvertAll(expression.Renames, id => id.Name)));
         }
 
-        public static DynamicExpression AnalyzeDefun(SymplDefun expression, AnalysisScope scope)
+        static DynamicExpression AnalyzeDefun(SymplDefun expression, AnalysisScope scope)
         {
             if (!scope.IsModule)
                 throw new InvalidOperationException("Use Defmethod or Lambda when not defining top-level function.");
@@ -66,7 +66,7 @@ namespace Sympl.Analysis
                 AnalyzeFunctionDefinition(expression.Parameters, expression.Body, scope, $"defun {expression.Name}"));
         }
 
-        public static LambdaExpression AnalyzeLambda(SymplLambda expression, AnalysisScope scope) =>
+        static LambdaExpression AnalyzeLambda(SymplLambda expression, AnalysisScope scope) =>
             AnalyzeFunctionDefinition(expression.Parameters, expression.Body, scope, "lambda");
 
         static LambdaExpression AnalyzeFunctionDefinition(IdOrKeywordToken[] parameters, SymplExpression[] body, AnalysisScope scope, String description)
@@ -127,7 +127,7 @@ namespace Sympl.Analysis
         /// <summary>
         /// Returns a dynamic InvokeMember or Invoke expression, depending on the Function expression.
         /// </summary>
-        public static DynamicExpression AnalyzeCall(SymplCall expression, AnalysisScope scope)
+        static DynamicExpression AnalyzeCall(SymplCall expression, AnalysisScope scope)
         {
             System.Runtime.CompilerServices.CallSiteBinder binder = expression.Function switch
             {
@@ -157,7 +157,7 @@ namespace Sympl.Analysis
         /// <summary>
         /// Returns a chain of GetMember and InvokeMember dynamic expressions for the dotted expression.
         /// </summary>
-        public static Expression AnalyzeDot(SymplDot expression, AnalysisScope scope)
+        static Expression AnalyzeDot(SymplDot expression, AnalysisScope scope)
         {
             var curExpr = AnalyzeExpression(expression.Target, scope);
             foreach (var e in expression.Expressions)
@@ -189,7 +189,7 @@ namespace Sympl.Analysis
         /// Handles IDs, indexing, and member sets. IDs are either lexical or dynamic expressions on the
         /// module scope. Everything else is dynamic.
         /// </summary>
-        public static Expression AnalyzeAssignment(SymplSet expression, AnalysisScope scope)
+        static Expression AnalyzeAssignment(SymplSet expression, AnalysisScope scope)
         {
             switch (expression.Source)
             {
@@ -247,7 +247,7 @@ namespace Sympl.Analysis
         /// we just return the stored ParamExpr. Otherwise, the reference is a dynamic member lookup
         /// on the root scope, a module object.
         /// </summary>
-        public static Expression AnalyzeIdentifier(SymplIdentifier expression, AnalysisScope scope)
+        static Expression AnalyzeIdentifier(SymplIdentifier expression, AnalysisScope scope)
         {
             if (expression.IdToken is KeywordToken token)
             {
@@ -294,7 +294,7 @@ namespace Sympl.Analysis
         /// Returns a Block with vars, each initialized in the order they appear. Each var's init
         /// expression can refer to vars initialized before it. The Block's body is the Let*'s body.
         /// </summary>
-        public static Expression AnalyzeLetStar(SymplLetStar expression, AnalysisScope scope)
+        static Expression AnalyzeLetStar(SymplLetStar expression, AnalysisScope scope)
         {
             var letscope = new AnalysisScope(scope, "let*");
             // Analyze bindings.
@@ -325,7 +325,7 @@ namespace Sympl.Analysis
         /// <summary>
         /// Returns a Block with the body expressions.
         /// </summary>
-        public static Expression AnalyzeBlock(SymplBlock expression, AnalysisScope scope) => Expression.Block(
+        static Expression AnalyzeBlock(SymplBlock expression, AnalysisScope scope) => Expression.Block(
             typeof(Object),
             Array.ConvertAll(expression.Body, e => AnalyzeExpression(e, scope)));
 
@@ -333,7 +333,7 @@ namespace Sympl.Analysis
         /// Converts a list, literal, or id expression to a runtime quoted literal and returns the Constant
         /// expression for it.
         /// </summary>
-        public static Expression AnalyzeQuote(SymplQuote expression, AnalysisScope scope) =>
+        static Expression AnalyzeQuote(SymplQuote expression, AnalysisScope scope) =>
             Expression.Constant(MakeQuoteConstant(expression.Expression, scope.Context));
 
         static Object? MakeQuoteConstant(Object expression, SymplContext context) => expression switch
@@ -344,25 +344,25 @@ namespace Sympl.Analysis
             _ => throw new InvalidOperationException($"Internal: quoted list has -- {expression}"),
         };
 
-        public static Expression AnalyzeEq(SymplEq expression, AnalysisScope scope)
+        static Expression AnalyzeEq(SymplEq expression, AnalysisScope scope)
             => Expression.Call(
                 WellKnownSymbols.Eq,
                 Expression.Convert(AnalyzeExpression(expression.Left, scope), typeof(Object)),
                 Expression.Convert(AnalyzeExpression(expression.Right, scope), typeof(Object)));
 
-        public static Expression AnalyzeCons(SymplCons expression, AnalysisScope scope)
+        static Expression AnalyzeCons(SymplCons expression, AnalysisScope scope)
             => Expression.Call(
                 WellKnownSymbols.MakeCons,
                 Expression.Convert(AnalyzeExpression(expression.Left, scope), typeof(Object)),
                 Expression.Convert(AnalyzeExpression(expression.Right, scope), typeof(Object)));
 
-        public static Expression AnalyzeListCall(SymplListCall expression, AnalysisScope scope)
+        static Expression AnalyzeListCall(SymplListCall expression, AnalysisScope scope)
             => Expression.Call(
                 WellKnownSymbols._List,
                 Expression.NewArrayInit(typeof(Object),
                 Array.ConvertAll(expression.Elements, e => Expression.Convert(AnalyzeExpression(e, scope), typeof(Object)))));
 
-        public static Expression AnalyzeIf(SymplIf expression, AnalysisScope scope)
+        static Expression AnalyzeIf(SymplIf expression, AnalysisScope scope)
             => Expression.Condition(
                 WrapBooleanTest(AnalyzeExpression(expression.Test, scope)),
                 Expression.Convert(AnalyzeExpression(expression.Consequent, scope), typeof(Object)),
@@ -379,7 +379,7 @@ namespace Sympl.Analysis
                     Expression.NotEqual(tmp, Expression.Constant(null, typeof(Object)))));
         }
 
-        public static Expression AnalyzeLoop(SymplLoop expression, AnalysisScope scope)
+        static Expression AnalyzeLoop(SymplLoop expression, AnalysisScope scope)
         {
             var loopScope = new AnalysisScope(scope, "loop ")
             {
@@ -393,7 +393,7 @@ namespace Sympl.Analysis
                 loopScope.LoopBreak);
         }
 
-        public static Expression AnalyzeBreak(SymplBreak expression, AnalysisScope scope)
+        static Expression AnalyzeBreak(SymplBreak expression, AnalysisScope scope)
         {
             var loopScope = FindFirstLoop(scope);
             if (loopScope is null)
@@ -423,12 +423,12 @@ namespace Sympl.Analysis
             return currentScope;
         }
 
-        public static Expression AnalyzeNew(SymplNew expression, AnalysisScope scope) => Expression.Dynamic(
+        static Expression AnalyzeNew(SymplNew expression, AnalysisScope scope) => Expression.Dynamic(
             scope.Context.CreateInstance(new CallInfo(expression.Arguments.Length)),
             typeof(Object),
             Analyze(expression.Arguments, scope, AnalyzeExpression(expression.Type, scope)));
 
-        public static Expression AnalyzeBinary(SymplBinary expression, AnalysisScope scope)
+        static Expression AnalyzeBinary(SymplBinary expression, AnalysisScope scope)
         {
             switch (expression.Operation)
             {
@@ -467,7 +467,7 @@ namespace Sympl.Analysis
             }
         }
 
-        public static Expression AnalyzeUnary(SymplUnary expression, AnalysisScope scope)
+        static Expression AnalyzeUnary(SymplUnary expression, AnalysisScope scope)
         {
             if (expression.Operation == ExpressionType.Not)
             {
@@ -487,7 +487,7 @@ namespace Sympl.Analysis
         /// This also works for .NET objects with indexer Item properties. We handle analyzing Elt for
         /// assignment in <see cref="AnalyzeAssignment(SymplSet, AnalysisScope)"/>.
         /// </devdoc>
-        public static Expression AnalyzeElt(SymplElt expression, AnalysisScope scope) => Expression.Dynamic(
+        static Expression AnalyzeElt(SymplElt expression, AnalysisScope scope) => Expression.Dynamic(
                 scope.Context.GetIndex(new CallInfo(expression.Indexes.Length)),
                 typeof(Object),
                 Analyze(expression.Indexes, scope, AnalyzeExpression(expression.ObjectExpr, scope)));

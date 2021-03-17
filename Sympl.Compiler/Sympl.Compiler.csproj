@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="DynamicLanguageRuntime" Version="1.2.3-candidate1" />
+        <PackageReference Include="DynamicLanguageRuntime" Version="1.3.0" />
     </ItemGroup>
     
     <ItemGroup>
